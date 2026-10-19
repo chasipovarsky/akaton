@@ -1,0 +1,18 @@
+.card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(59, 42, 122, 0.08);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  &.answered { opacity: 0.8; }
+}
+.meta { font-size: 0.8rem; color: #7a7396; }
+.q { font-weight: 600; margin: 6px 0 10px; }
+.a { margin: 0; color: #1b8a4b; }
+.row {
+  display: flex;
+  gap: 8px;
+  input { flex: 1; padding: 10px; border: 1px solid #c9c0ec; border-radius: 10px; font-size: 1rem; }
+  button { background: #3b2a7a; color: #fff; border: 0; border-radius: 10px; padding: 0 18px; }
+}
+.empty { color: #7a7396; }

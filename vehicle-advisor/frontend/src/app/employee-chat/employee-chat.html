@@ -1,0 +1,123 @@
+<div class="layout">
+  <section class="chat">
+    <header class="bar">
+      <h2>שיחה עם היועץ</h2>
+      <button class="ghost" (click)="newChat()">שיחה חדשה</button>
+    </header>
+
+    <div class="messages">
+      @if (messages().length === 0) {
+        <p class="hint">
+          שלום! אפשר לשאול למשל: "אני שוקל לעבור לרכב חשמלי, כמה זה ישנה לי בנטו?"
+        </p>
+      }
+      @for (m of messages(); track $index) {
+        <div class="msg" [class.user]="m.role === 'user'">{{ clean(m.text) }}</div>
+      }
+      @if (busy()) {
+        <div class="msg typing">חושב...</div>
+      }
+      <div #end></div>
+    </div>
+
+    <div class="composer">
+      <input
+        type="text"
+        placeholder="כתבי הודעה..."
+        [value]="draft()"
+        (input)="draft.set($any($event.target).value)"
+        (keydown.enter)="send()"
+      />
+      <button (click)="send()" [disabled]="busy() || !draft().trim()">שליחה</button>
+    </div>
+  </section>
+
+  @if (comparison(); as c) {
+    <section class="compare">
+      <h2>ההשוואה</h2>
+      @if (c.reason) {
+        <p class="reason">זכאות: {{ c.reason }}</p>
+      }
+
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>היום</th>
+            <th>חלופה</th>
+          </tr>
+        </thead>
+        <tbody>
+          @if (c.details; as d) {
+            <tr>
+              <td>רכב</td>
+              <td>{{ d.today.label }}</td>
+              <td>{{ d.alt.label }}</td>
+            </tr>
+            @if (d.today.cost || d.alt.cost) {
+              <tr>
+                <td>עלות לחברה (תקציב {{ d.budget | number: '1.0-0' }} ₪)</td>
+                <td>{{ d.today.cost ? (d.today.cost | number: '1.0-0') + ' ₪' : '—' }}</td>
+                <td>{{ d.alt.cost ? (d.alt.cost | number: '1.0-0') + ' ₪' : '—' }}</td>
+              </tr>
+            }
+            <tr>
+              <td>שווי שימוש</td>
+              <td>{{ d.today.value_of_use | number: '1.0-0' }} ₪</td>
+              <td>{{ d.alt.value_of_use | number: '1.0-0' }} ₪</td>
+            </tr>
+            <tr>
+              <td>השתתפות שלך</td>
+              <td>{{ d.today.participation | number: '1.0-0' }} ₪</td>
+              <td>{{ d.alt.participation | number: '1.0-0' }} ₪</td>
+            </tr>
+            @if (d.today.electric_refund || d.alt.electric_refund) {
+              <tr>
+                <td>החזר חשמל (נטו)</td>
+                <td>{{ d.today.electric_refund | number: '1.0-0' }} ₪</td>
+                <td>{{ d.alt.electric_refund | number: '1.0-0' }} ₪</td>
+              </tr>
+            }
+            @if (d.today.maintenance || d.alt.maintenance) {
+              <tr>
+                <td>אחזקת רכב (חייבת במס)</td>
+                <td>{{ d.today.maintenance | number: '1.0-0' }} ₪</td>
+                <td>{{ d.alt.maintenance | number: '1.0-0' }} ₪</td>
+              </tr>
+            }
+            @if (d.alt.family_share) {
+              <tr>
+                <td>חלקך בפער המסלול המשפחתי</td>
+                <td>—</td>
+                <td>{{ d.alt.family_share | number: '1.0-0' }} ₪</td>
+              </tr>
+            }
+          }
+          <tr>
+            <td>מס הכנסה</td>
+            <td>{{ c.today.tax | number: '1.0-0' }} ₪</td>
+            <td>{{ c.alt.tax | number: '1.0-0' }} ₪</td>
+          </tr>
+          <tr>
+            <td>ביטוח לאומי ובריאות</td>
+            <td>{{ c.today.ni_health | number: '1.0-0' }} ₪</td>
+            <td>{{ c.alt.ni_health | number: '1.0-0' }} ₪</td>
+          </tr>
+          <tr class="main">
+            <td>נטו חודשי</td>
+            <td>{{ c.today.net | number: '1.0-0' }} ₪</td>
+            <td>{{ c.alt.net | number: '1.0-0' }} ₪</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="diff" [class.pos]="c.diff >= 0" [class.neg]="c.diff < 0">
+        הפרש בנטו החודשי: <strong>{{ signed(c.diff) }} ₪</strong>
+      </div>
+
+      @if (c.explanation) {
+        <div class="why"><strong>מה השתנה:</strong> {{ c.explanation }}</div>
+      }
+    </section>
+  }
+</div>

@@ -1,0 +1,19 @@
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: #3b2a7a;
+  color: #fff;
+
+  .brand { font-weight: 700; margin-inline-end: auto; }
+  a {
+    color: #d9d2f5;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    &.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
+  }
+}
+
+main { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }

@@ -1,0 +1,29 @@
+<h2>מסך נציג תחבורה</h2>
+
+<h3>שאלות פתוחות ({{ open().length }})</h3>
+@for (q of open(); track q.id) {
+  <div class="card">
+    <div class="meta">שיחה: {{ q.session_id.slice(0, 8) }} · {{ q.created }}</div>
+    <p class="q">{{ q.question }}</p>
+    <div class="row">
+      <input
+        type="text"
+        placeholder="התשובה שלך..."
+        [value]="drafts()[q.id] ?? ''"
+        (input)="setDraft(q.id, $any($event.target).value)"
+        (keydown.enter)="send(q)"
+      />
+      <button (click)="send(q)">שליחה</button>
+    </div>
+  </div>
+} @empty {
+  <p class="empty">אין שאלות פתוחות 🎉</p>
+}
+
+<h3>נענו ({{ done().length }})</h3>
+@for (q of done(); track q.id) {
+  <div class="card answered">
+    <p class="q">{{ q.question }}</p>
+    <p class="a">תשובה: {{ q.answer }}</p>
+  </div>
+}
