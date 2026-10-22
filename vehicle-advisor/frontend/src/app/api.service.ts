@@ -73,6 +73,11 @@ export interface RankResult {
   turning_point?: { extra_gross: number; new_best: string; new_best_target: string } | null;
 }
 
+export interface DemoEmployee {
+  id: string;
+  title: string;
+}
+
 export interface AgentQuestion {
   id: number;
   session_id: string;
@@ -92,6 +97,16 @@ export class Api {
 
   state(sessionId: string): Observable<ChatState> {
     return this.http.get<ChatState>(`${BASE}/chat/${sessionId}/state`);
+  }
+
+  demoEmployees(): Observable<DemoEmployee[]> {
+    return this.http.get<DemoEmployee[]>(`${BASE}/demo/employees`);
+  }
+
+  loadDemo(empId: string, sessionId: string): Observable<ChatState> {
+    return this.http.post<ChatState>(`${BASE}/demo/${encodeURIComponent(empId)}`, {
+      session_id: sessionId,
+    });
   }
 
   rank(sessionId: string): Observable<RankResult> {

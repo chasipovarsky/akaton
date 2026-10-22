@@ -131,17 +131,17 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
   justify-content: center;
   gap: var(--s-2);
 }
-.chip {
-  min-block-size: 40px;
-  padding-inline: var(--s-4);
-  border: 1px solid var(--c-primary-line);
-  border-radius: var(--r-pill);
-  background: var(--c-surface);
-  color: var(--c-primary);
-  font-weight: 600;
-  transition: background-color var(--t-fast), border-color var(--t-fast);
-  &:hover { background: var(--c-primary-soft); border-color: var(--c-primary); }
+.demos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding-block: var(--s-2) 0;
+  padding-inline: var(--s-3);
+  border-block-start: 1px solid var(--c-line);
 }
+.demos-label { font-size: 0.82rem; color: var(--c-muted); }
+.demos + .composer { border-block-start: 0; }
 
 .composer {
   display: flex;

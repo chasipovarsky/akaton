@@ -1,6 +1,6 @@
 import { Component, ElementRef, OnInit, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { Api, ChatMsg, Comparison, RankResult } from '../api.service';
+import { Api, ChatMsg, Comparison, DemoEmployee, RankResult } from '../api.service';
 
 @Component({
   selector: 'app-employee-chat',
@@ -25,6 +25,7 @@ export class EmployeeChat implements OnInit {
   loading = signal(true);
   // הודעה שנכשלה בשליחה — מאפשרת "לנסות שוב"
   failed = signal<{ text: string; sent: string } | null>(null);
+  demos = signal<DemoEmployee[]>([]);
   // "מה הכי משתלם לי?" — null = סגור
   ranking = signal<RankResult | 'loading' | 'error' | null>(null);
   listRef = viewChild<ElementRef<HTMLElement>>('list');
@@ -39,6 +40,27 @@ export class EmployeeChat implements OnInit {
         this.scroll();
       },
       error: () => this.loading.set(false),
+    });
+    this.api.demoEmployees().subscribe({ next: (d) => this.demos.set(d), error: () => {} });
+  }
+
+  loadDemo(id: string) {
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.failed.set(null);
+    this.api.loadDemo(id, this.sessionId()).subscribe({
+      next: (s) => {
+        // פרופיל חדש — ההשוואה והדירוג הקודמים כבר לא רלוונטיים
+        this.messages.set(s.history);
+        this.comparison.set(null);
+        this.ranking.set(null);
+        this.busy.set(false);
+        this.scroll();
+      },
+      error: () => {
+        this.failed.set({ text: 'לא הצלחתי לטעון את העובדת לדוגמה. אפשר לנסות שוב.', sent: '' });
+        this.busy.set(false);
+      },
     });
   }
 

@@ -101,6 +101,17 @@
       }
     </div>
 
+    @if (demos().length) {
+      <div class="demos" role="group" aria-labelledby="demos-label">
+        <span id="demos-label" class="demos-label">אפשר לנסות עם עובדת לדוגמה:</span>
+        @for (d of demos(); track d.id) {
+          <button class="chip sm" type="button" [disabled]="busy()" (click)="loadDemo(d.id)">
+            {{ d.title }}
+          </button>
+        }
+      </div>
+    }
+
     <form class="composer" (submit)="$event.preventDefault(); send()">
       <input
         #input

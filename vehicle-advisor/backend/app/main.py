@@ -12,7 +12,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import store
-from app.config import load_catalogue, load_rules
+from google.genai import types
+
+from app.config import load_catalogue, load_rules, load_demo_employees
 from app.comparison import run_comparison, rank_options
 from app.agent import chat as agent_chat, REQUIRED
 
@@ -171,6 +173,56 @@ def rank_endpoint(req: RankRequest):
     if missing:
         return {"status": "missing_profile", "missing": missing}
     return rank_options(profile, with_turning_point=True)
+
+
+# ── עובדות לדוגמה ───────────────────────────────────────────────────────────
+class DemoRequest(BaseModel):
+    session_id: str
+
+
+def _demo_title(p: dict) -> str:
+    k = p["base"] / 1000
+    return f"קבוצה {p['group']}', {k:g} אלף ₪"
+
+
+def _demo_summary(e: dict) -> str:
+    """הודעת בוט שמסכמת את הפרטים — כך המודל רואה אותם בשיחה ולא שואל שוב."""
+    p = e["profile"]
+    car = (f"רכב היום {e['car_today']}, השתתפות {p['current_participation']:,} ₪"
+           if "current_car_id" in p else f"ללא רכב, אחזקת רכב {p['current_maintenance']:,} ₪")
+    return (
+        "טענתי את הפרטים של העובדת לדוגמה: "
+        f"קבוצה {p['group']}, שכר בסיס {p['base']:,} ₪, עמלות {p['commissions']:,} ₪, "
+        f"בונוס {p['bonus']:,} ₪, פנסיה {p['pension_pct']}%, קרן השתלמות {p['study_pct']}%, "
+        f"{p['credit_points']} נקודות זיכוי, {p['children']} ילדים עד גיל 23, "
+        f"עיסוק {p['occupation']}, {car}.\n"
+        'אפשר ללחוץ עכשיו על "מה הכי משתלם לי?", או לשאול אותי על רכב מסוים.'
+    )
+
+
+@api.get("/demo/employees")
+def demo_employees():
+    return [{"id": e["id"], "title": _demo_title(e["profile"])} for e in load_demo_employees()]
+
+
+@api.post("/demo/{emp_id}")
+def demo_load(emp_id: str, req: DemoRequest):
+    _require_sid(req.session_id)
+    emp = next((e for e in load_demo_employees() if e["id"] == emp_id), None)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="עובדת לדוגמה לא נמצאה")
+    _, history = store.load_session(req.session_id)
+    # פרופיל חדש לגמרי (בלי השוואה קודמת), וההיסטוריה ממשיכה
+    history += [
+        types.Content(role="user", parts=[types.Part(
+            text=f"טעינת עובדת לדוגמה: {_demo_title(emp['profile'])}")]),
+        types.Content(role="model", parts=[types.Part(text=_demo_summary(emp))]),
+    ]
+    store.save_session(req.session_id, dict(emp["profile"]), history)
+    return {
+        "history": store.display_history(req.session_id),
+        "comparison": None,
+    }
 
 
 @api.get("/chat/{session_id}/state")
