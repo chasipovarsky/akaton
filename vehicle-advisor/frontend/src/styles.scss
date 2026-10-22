@@ -71,6 +71,9 @@ button:disabled { cursor: not-allowed; }
   border-radius: var(--r-sm);
 }
 
+/* sprite של אייקוני SVG — מוסתר, רק מקור ל-<use> */
+.sprite { position: absolute; inline-size: 0; block-size: 0; overflow: hidden; }
+
 .sr-only {
   position: absolute;
   inline-size: 1px;

@@ -5,7 +5,7 @@ from google.genai import types
 
 from app import store
 from app.config import load_catalogue, load_rules
-from app.comparison import run_comparison
+from app.comparison import run_comparison, today_snapshot
 
 load_dotenv()
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -28,7 +28,7 @@ SYSTEM_PROMPT = """את "יועצת הרכב של שטראוס": עוזרת בע
    - אל תציגי רשימה של כל הפרטים החסרים בבת אחת.
    - לפני כל שאלה בדקי בפרופיל מה כבר נשמר, ולעולם אל תשאלי שוב על פרט שכבר נמסר.
 6. לפני בחירת רכב, השתמשי ב-list_cars כדי למצוא את המזהה (CAR-xx) לפי השם שהעובדת אמרה.
-7. אם חסרה השתתפות ברכב החדש והעובדת לא יודעת, השתמשי ב-ask_agent ואמרי לה: "חסר לי X, שאלתי את הנציג". אל תנחשי. כשמגיעה תשובת נציג בהודעה שמסומנת [תשובת נציג], השתמשי בה והמשיכי לחשב.
+7. אם חסרה השתתפות ברכב החדש והעובדת לא יודעת, השתמשי ב-ask_agent ואמרי לה: "חסר לי X, שאלתי את הנציג". אל תנחשי. אם ask_agent מחזיר today_net, הוסיפי: "בינתיים, הנטו שלך היום הוא X ₪. ההשוואה המלאה תופיע אחרי שהנציג יענה." (X רק מהכלי). כשמגיעה תשובת נציג בהודעה שמסומנת [תשובת נציג], השתמשי בה מיד והמשיכי לחשב עם compare_alternative, בלי לחכות להודעה נוספת מהעובדת.
 8. אם הכלי מחזיר שהעובדת אינה זכאית, הסבירי את הסיבה כפי שהיא ואל תציעי עקיפה.
 9. בסיום, הציגי: נטו היום, נטו בחלופה והפרש. אחר כך הציגי את שדה explanation שהכלי החזיר כפי שהוא, בלי שינוי, תוספת או חישוב. אל תציני סכום ברוטו של החזר חשמל; העובדת רואה 250 ₪ נטו בלבד.
 10. עברית פשוטה וקצרה."""
@@ -117,10 +117,21 @@ def _run_tool(sid: str, profile: dict, name: str, args: dict) -> dict:
         res = run_comparison(profile, args["target"], args.get("participation"))
         if res.get("status") == "ok":
             profile["_last_comparison"] = res
+            profile.pop("_pending_target", None)
+        elif res.get("status") == "missing" and res.get("missing") == "participation":
+            # נזכור לאיזו חלופה חסרה השתתפות — אם השאלה תישלח לנציג, נציג בינתיים את מצב היום
+            profile["_pending_target"] = args["target"]
         return res
 
     if name == "ask_agent":
         qid = store.add_question(sid, args["question"])
+        target = profile.get("_pending_target")
+        if target:
+            snap = today_snapshot(profile, target)
+            if snap["status"] == "pending":
+                profile["_last_comparison"] = snap
+                return {"status": "sent", "question_id": qid, "note": "השאלה נשלחה לנציג",
+                        "today_net": snap["today"]["net"]}
         return {"status": "sent", "question_id": qid, "note": "השאלה נשלחה לנציג"}
 
     return {"error": f"כלי לא מוכר: {name}"}
@@ -149,8 +160,9 @@ def chat(sid: str, message: str) -> str:
     base_len = len(contents)
 
     # תשובות נציג שהגיעו מאז ההודעה האחרונה
+    answers = store.pop_answers(sid)
     prefix = "".join(
-        f'[תשובת נציג לשאלה "{q["question"]}"]: {q["answer"]}\n' for q in store.pop_answers(sid)
+        f'[תשובת נציג לשאלה "{q["question"]}"]: {q["answer"]}\n' for q in answers
     )
     contents.append(types.Content(role="user", parts=[types.Part(text=prefix + message)]))
 
@@ -180,4 +192,6 @@ def chat(sid: str, message: str) -> str:
     except Exception:
         # לא שומרים היסטוריה חצי-גמורה, אבל כן את הפרופיל שנאסף
         store.save_session(sid, profile, contents[:base_len])
+        # תשובות הנציג לא נוצלו — מחזירים אותן כדי שלא ילכו לאיבוד
+        store.unmark_delivered([q["id"] for q in answers])
         raise

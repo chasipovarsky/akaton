@@ -38,20 +38,34 @@ export interface Comparison {
   details?: Details;
 }
 
+// "בינתיים: מצב היום" — חסר נתון לחלופה והשאלה נשלחה לנציג. אין מספרים של החלופה.
+export interface PendingComparison {
+  status: 'pending';
+  today: Scenario;
+  details: { group: string; budget: number; today: ScenarioDetails };
+  alt_label: string | null;
+}
+
 export interface ChatMsg {
   role: 'user' | 'bot';
   text: string;
 }
 
-export interface ChatReply {
+// מצב השאלות לנציג בשיחה — לבדיקה האוטומטית של תשובת הנציג
+export interface QuestionStatus {
+  open_questions?: number;
+  answers_ready?: number;
+}
+
+export interface ChatReply extends QuestionStatus {
   reply: string;
-  comparison?: Comparison | null;
+  comparison?: Comparison | PendingComparison | null;
   error?: string;
 }
 
-export interface ChatState {
+export interface ChatState extends QuestionStatus {
   history: ChatMsg[];
-  comparison: Comparison | null;
+  comparison: Comparison | PendingComparison | null;
 }
 
 export interface RankOption {
@@ -93,6 +107,13 @@ export class Api {
 
   chat(sessionId: string, message: string): Observable<ChatReply> {
     return this.http.post<ChatReply>(`${BASE}/chat`, { session_id: sessionId, message });
+  }
+
+  // ממשיך את השיחה לבד אם הגיעה תשובת נציג (בלי לקרוא למודל אם אין)
+  resume(sessionId: string): Observable<ChatReply & { resumed: boolean }> {
+    return this.http.post<ChatReply & { resumed: boolean }>(`${BASE}/chat/resume`, {
+      session_id: sessionId,
+    });
   }
 
   state(sessionId: string): Observable<ChatState> {

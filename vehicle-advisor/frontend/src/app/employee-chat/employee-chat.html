@@ -228,7 +228,58 @@
         }
       </div>
     </section>
-  } @else if (comparison(); as c) {
+  } @else if (pending(); as p) {
+    <!-- בינתיים: מצב היום — בלי שום מספר של החלופה -->
+    <section class="decision" aria-labelledby="pending-title">
+      <p class="pending-label" role="status">
+        <strong id="pending-title">בינתיים: מצב היום.</strong>
+        ההשוואה המלאה תופיע אחרי שהנציגה תענה.
+      </p>
+      <div class="panel hero">
+        <div class="hero-label">נטו חודשי היום</div>
+        <div class="hero-net">{{ p.today.net | number: '1.0-0' }} <span class="cur">₪</span></div>
+        @if (p.alt_label) {
+          <div class="hero-meta">
+            <span class="muted">החלופה שנבדקת: {{ p.alt_label }} · מחכה לנתון מהנציגה</span>
+          </div>
+        }
+      </div>
+      <div class="panel col">
+        <h3>היום</h3>
+        <ul class="rows">
+          <li>
+            <svg class="icon" aria-hidden="true"><use href="#i-car" /></svg>
+            <span class="k">רכב</span>
+            <span class="v">{{ p.details.today.label }}</span>
+          </li>
+          <li>
+            <svg class="icon" aria-hidden="true"><use href="#i-tag" /></svg>
+            <span class="k">שווי שימוש</span>
+            <span class="v">{{ p.details.today.value_of_use | number: '1.0-0' }} ₪</span>
+          </li>
+          <li>
+            <svg class="icon" aria-hidden="true"><use href="#i-wallet" /></svg>
+            <span class="k">השתתפות שלך</span>
+            <span class="v">{{ p.details.today.participation | number: '1.0-0' }} ₪</span>
+          </li>
+          @if (p.details.today.electric_refund) {
+            <li>
+              <svg class="icon" aria-hidden="true"><use href="#i-bolt" /></svg>
+              <span class="k">החזר חשמל (נטו)</span>
+              <span class="v">{{ p.details.today.electric_refund | number: '1.0-0' }} ₪</span>
+            </li>
+          }
+          @if (p.details.today.maintenance) {
+            <li>
+              <svg class="icon" aria-hidden="true"><use href="#i-wrench" /></svg>
+              <span class="k">אחזקת רכב (חייבת במס)</span>
+              <span class="v">{{ p.details.today.maintenance | number: '1.0-0' }} ₪</span>
+            </li>
+          }
+        </ul>
+      </div>
+    </section>
+  } @else if (full(); as c) {
     <section class="decision" aria-labelledby="decision-title">
       <h2 id="decision-title" class="sr-only">ההשוואה</h2>
 

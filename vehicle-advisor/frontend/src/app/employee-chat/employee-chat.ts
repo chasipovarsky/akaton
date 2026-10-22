@@ -1,6 +1,12 @@
-import { Component, ElementRef, OnInit, inject, signal, viewChild } from '@angular/core';
+import {
+  Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, viewChild,
+} from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { Api, ChatMsg, Comparison, DemoEmployee, RankResult } from '../api.service';
+import {
+  Api, ChatMsg, Comparison, DemoEmployee, PendingComparison, QuestionStatus, RankResult,
+} from '../api.service';
+
+const POLL_MS = 5000;
 
 @Component({
   selector: 'app-employee-chat',
@@ -8,8 +14,10 @@ import { Api, ChatMsg, Comparison, DemoEmployee, RankResult } from '../api.servi
   templateUrl: './employee-chat.html',
   styleUrl: './employee-chat.scss',
 })
-export class EmployeeChat implements OnInit {
+export class EmployeeChat implements OnInit, OnDestroy {
   private api = inject(Api);
+  // בדיקה כל 5 שניות אם הנציגה ענתה — רק כשיש שאלה פתוחה
+  private poll?: ReturnType<typeof setInterval>;
 
   readonly suggestions = [
     'אני רוצה לעבור לרכב חשמלי',
@@ -19,7 +27,16 @@ export class EmployeeChat implements OnInit {
 
   sessionId = signal(this.loadSid());
   messages = signal<ChatMsg[]>([]);
-  comparison = signal<Comparison | null>(null);
+  comparison = signal<Comparison | PendingComparison | null>(null);
+  // השוואה מלאה, או "בינתיים: מצב היום" כשמחכים לנציג
+  full = computed(() => {
+    const c = this.comparison();
+    return c && c.status !== 'pending' ? (c as Comparison) : null;
+  });
+  pending = computed(() => {
+    const c = this.comparison();
+    return c?.status === 'pending' ? (c as PendingComparison) : null;
+  });
   draft = signal('');
   busy = signal(false);
   loading = signal(true);
@@ -38,10 +55,66 @@ export class EmployeeChat implements OnInit {
         this.comparison.set(s.comparison);
         this.loading.set(false);
         this.scroll();
+        this.syncPolling(s);
       },
       error: () => this.loading.set(false),
     });
     this.api.demoEmployees().subscribe({ next: (d) => this.demos.set(d), error: () => {} });
+  }
+
+  ngOnDestroy() {
+    this.stopPolling();
+  }
+
+  // ── תשובת נציג: בדיקה אוטומטית והמשך שיחה ────────────────────────────────
+  private syncPolling(s: QuestionStatus) {
+    if (s.answers_ready) {
+      this.resume();
+    } else if (s.open_questions) {
+      this.poll ??= setInterval(() => this.checkRep(), POLL_MS);
+    } else {
+      this.stopPolling();
+    }
+  }
+
+  private stopPolling() {
+    clearInterval(this.poll);
+    this.poll = undefined;
+  }
+
+  private checkRep() {
+    if (this.busy()) return; // העובדת באמצע שליחה — ננסה בסבב הבא
+    this.api.state(this.sessionId()).subscribe({
+      next: (s) => this.syncPolling(s),
+      error: () => {}, // תקלה רגעית — הבדיקה הבאה תנסה שוב
+    });
+  }
+
+  private resume() {
+    if (this.busy()) return;
+    this.stopPolling();
+    this.busy.set(true);
+    const sid = this.sessionId();
+    this.api.resume(sid).subscribe({
+      next: () => {
+        // ההיסטוריה מהשרת כוללת גם את "תשובת הנציג" וגם את תשובת הבוט
+        this.api.state(sid).subscribe({
+          next: (s) => {
+            this.messages.set(s.history);
+            this.comparison.set(s.comparison);
+            this.busy.set(false);
+            this.scroll();
+            this.syncPolling(s);
+          },
+          error: () => this.busy.set(false),
+        });
+      },
+      error: (e) => {
+        const msg = e?.error?.reply ?? 'הנציגה ענתה, אבל לא הצלחתי להמשיך את השיחה. אפשר לכתוב לי הודעה.';
+        this.failed.set({ text: msg, sent: '' });
+        this.busy.set(false);
+      },
+    });
   }
 
   loadDemo(id: string) {
@@ -79,6 +152,7 @@ export class EmployeeChat implements OnInit {
         if (r.comparison) this.comparison.set(r.comparison);
         this.busy.set(false);
         this.scroll();
+        this.syncPolling(r);
       },
       error: (e) => {
         // מגבלת קצב / מכסה / הודעה ארוכה — השרת מחזיר reply ידידותי
@@ -127,6 +201,7 @@ export class EmployeeChat implements OnInit {
   }
 
   newChat() {
+    this.stopPolling();
     const sid = crypto.randomUUID();
     localStorage.setItem('sid', sid);
     this.sessionId.set(sid);

@@ -171,6 +171,29 @@ def run_comparison(emp: dict, target: str, participation: float | None = None) -
     }
 
 
+def today_snapshot(emp: dict, target: str | None = None) -> dict:
+    """'בינתיים: מצב היום' — כשחסר נתון לחלופה (למשל השתתפות) והשאלה נשלחה לנציג.
+    מחשב רק את היום; לא ממלא ולא מנחש שום ערך של החלופה."""
+    rules = load_rules()
+    catalogue = load_catalogue()
+    today, miss = _today_scenario(emp, catalogue, rules)
+    if miss:
+        return {"status": "missing", **miss}
+    res = compare(emp, today, today, rules)["today"]
+    electric_net = rules["electric"]["netBonus"]
+    car = _find_car(catalogue, target) if target else None
+    return {
+        "status": "pending",
+        "today": {k: round(v) for k, v in res.items()},
+        "details": {
+            "group": emp.get("group"),
+            "budget": rules["budgets"].get(emp.get("group")),
+            "today": _details(today, electric_net),
+        },
+        "alt_label": _car_label(car) if car else ("ויתור על רכב" if target == "WAIVER" else None),
+    }
+
+
 def _rank_candidates(emp: dict, rules: dict, catalogue: list):
     """בונה פעם אחת את תרחיש היום ואת כל החלופות שהעובד זכאי להן.
     זכאות, שווי שימוש והשתתפות לא תלויים בשכר — לכן אפשר לחשב נטו שוב ושוב בלי לבנות מחדש."""

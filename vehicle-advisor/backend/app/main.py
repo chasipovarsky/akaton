@@ -129,26 +129,52 @@ def compare_endpoint(req: CompareRequest):
     return run_comparison(req.employee, req.target, req.participation)
 
 
+def _rate_limited() -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"reply": "הגעת למגבלת השאלות (20 בכל 10 דקות). אפשר לנסות שוב בעוד כמה דקות.",
+                 "error": "rate_limit"},
+    )
+
+
 @api.post("/chat")
 def chat_endpoint(req: ChatRequest, request: Request):
     _require_sid(req.session_id)
-    ip = _client_ip(request)
-    if not _check_rate(ip):
-        return JSONResponse(
-            status_code=429,
-            content={"reply": "הגעת למגבלת השאלות (20 בכל 10 דקות). אפשר לנסות שוב בעוד כמה דקות.",
-                     "error": "rate_limit"},
-        )
+    if not _check_rate(_client_ip(request)):
+        return _rate_limited()
     if len(req.message) > _MAX_MSG_LEN:
         return JSONResponse(
             status_code=400,
             content={"reply": f"ההודעה ארוכה מדי (מקסימום {_MAX_MSG_LEN} תווים).",
                      "error": "message_too_long"},
         )
-    try:
-        reply = agent_chat(req.session_id, req.message)
+    return _run_agent(req.session_id, req.message)
+
+
+@api.post("/chat/resume")
+def chat_resume(req: RankRequest, request: Request):
+    """ממשיך את השיחה לבד כשהגיעה תשובת נציג — בלי הודעה מהעובדת.
+    אם אין תשובה שמחכה, לא קוראים למודל בכלל."""
+    _require_sid(req.session_id)
+    status = store.question_status(req.session_id)
+    if not status["answers_ready"]:
         profile, _ = store.load_session(req.session_id)
-        return {"reply": reply, "comparison": profile.get("_last_comparison")}
+        return {"resumed": False, "comparison": profile.get("_last_comparison"), **status}
+    if not _check_rate(_client_ip(request)):
+        return _rate_limited()
+    # agent.chat מצרף את תשובות הנציג לפני ההודעה; ההודעה עצמה ריקה
+    res = _run_agent(req.session_id, "")
+    if isinstance(res, JSONResponse):  # מכסה וכו'
+        return res
+    return {"resumed": True, **res}
+
+
+def _run_agent(sid: str, message: str):
+    try:
+        reply = agent_chat(sid, message)
+        profile, _ = store.load_session(sid)
+        return {"reply": reply, "comparison": profile.get("_last_comparison"),
+                **store.question_status(sid)}
     except Exception as e:
         # שגיאת מכסה מכל המודלים
         if "429" in str(e) or "quota" in str(e).lower() or "Resource has been exhausted" in str(e):
@@ -232,6 +258,7 @@ def chat_state(session_id: str):
     return {
         "history": store.display_history(session_id),
         "comparison": profile.get("_last_comparison"),
+        **store.question_status(session_id),
     }
 
 

@@ -95,6 +95,23 @@ def answer_question(qid: int, answer: str) -> bool:
         return cur.rowcount == 1
 
 
+def question_status(sid: str) -> dict:
+    """open_questions: שאלות לנציג שעוד לא נענו. answers_ready: נענו ועוד לא נמסרו לבוט."""
+    with _conn() as con:
+        row = con.execute(
+            "SELECT SUM(answer IS NULL) AS open_q, "
+            "SUM(answer IS NOT NULL AND delivered=0) AS ready "
+            "FROM questions WHERE session_id=?", (sid,)).fetchone()
+    return {"open_questions": row["open_q"] or 0, "answers_ready": row["ready"] or 0}
+
+
+def unmark_delivered(ids: list[int]) -> None:
+    """מחזיר תשובות למצב 'לא נמסרו' — כשהבוט נכשל לפני שהשתמש בהן."""
+    with _conn() as con:
+        for qid in ids:
+            con.execute("UPDATE questions SET delivered=0 WHERE id=?", (qid,))
+
+
 def pop_answers(sid: str) -> list[dict]:
     """תשובות נציג שעוד לא נמסרו לשיחה; מסמן אותן כנמסרו."""
     with _conn() as con:
