@@ -2,7 +2,8 @@ from pathlib import Path
 import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-CSV_PATH = DATA_DIR / "vehicle_value_2026.csv"
+_GZ_PATH  = DATA_DIR / "vehicle_value_2026.csv.gz"
+_CSV_PATH = DATA_DIR / "vehicle_value_2026.csv"
 
 COLUMN_MAP = {
     "שנת מס": "tax_year",
@@ -27,7 +28,8 @@ _df = None
 def load_vehicles() -> pd.DataFrame:
     global _df
     if _df is None:
-        df = pd.read_csv(CSV_PATH, encoding="cp1255")
+        src = _GZ_PATH if _GZ_PATH.exists() else _CSV_PATH
+        df = pd.read_csv(src, encoding="cp1255")
         df.columns = [c.strip() for c in df.columns]
         df = df.rename(columns=COLUMN_MAP)
         df = df[[c for c in COLUMN_MAP.values() if c in df.columns]]

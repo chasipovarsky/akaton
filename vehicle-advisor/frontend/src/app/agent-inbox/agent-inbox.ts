@@ -12,7 +12,7 @@ export class AgentInbox implements OnInit, OnDestroy {
   private timer?: ReturnType<typeof setInterval>;
 
   questions = signal<AgentQuestion[]>([]);
-  drafts = signal<Record<number, string>>({});
+  drafts = signal<Partial<Record<number, string>>>({});
 
   open = computed(() => this.questions().filter((q) => q.answer === null));
   done = computed(() => this.questions().filter((q) => q.answer !== null));

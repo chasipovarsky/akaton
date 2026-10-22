@@ -1,19 +1,41 @@
+.demo-banner {
+  background: var(--c-warn-bg);
+  color: var(--c-warn-text);
+  text-align: center;
+  padding-block: var(--s-2);
+  padding-inline: var(--s-4);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-block-end: 1px solid var(--c-warn-line);
+}
+
 .top {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 24px;
-  background: #3b2a7a;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding-block: var(--s-3);
+  padding-inline: var(--s-5);
+  background: var(--c-primary);
   color: #fff;
 
-  .brand { font-weight: 700; margin-inline-end: auto; }
+  .brand { font-weight: 700; font-size: 1.05rem; margin-inline-end: auto; }
   a {
-    color: #d9d2f5;
+    color: #e4def9;
     text-decoration: none;
-    padding: 6px 12px;
-    border-radius: 8px;
+    padding-block: 6px;
+    padding-inline: var(--s-3);
+    border-radius: var(--r-sm);
+    transition: background-color var(--t-fast);
+    &:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
     &.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
+    &:focus-visible { outline-color: #fff; }
   }
 }
 
-main { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+main {
+  padding-block: var(--s-5);
+  padding-inline: var(--s-5);
+  max-inline-size: 1200px;
+  margin-inline: auto;
+}

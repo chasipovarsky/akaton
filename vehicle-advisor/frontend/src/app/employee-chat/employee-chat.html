@@ -1,123 +1,250 @@
-<div class="layout">
-  <section class="chat">
+<!-- אייקונים (sprite פנימי, בלי ספריות) -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-car" viewBox="0 0 24 24">
+    <path d="M3 13l2-5.5A2 2 0 0 1 6.9 6h10.2a2 2 0 0 1 1.9 1.5L21 13v4h-2M5 17H3v-4h18M9 17h6" />
+    <circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" />
+  </symbol>
+  <symbol id="i-coins" viewBox="0 0 24 24">
+    <ellipse cx="12" cy="6" rx="7" ry="3" />
+    <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+  </symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24">
+    <path d="M3 12V4h8l10 10-8 8L3 12z" /><circle cx="7.5" cy="8.5" r="1.5" />
+  </symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24">
+    <rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M16 15h2" />
+  </symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24">
+    <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+  </symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24">
+    <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4 2.5-2.5z" />
+  </symbol>
+  <symbol id="i-family" viewBox="0 0 24 24">
+    <circle cx="9" cy="8" r="3" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+    <circle cx="17" cy="9" r="2.5" /><path d="M16 14.5c2.8.4 5 2.8 5 5.5" />
+  </symbol>
+  <symbol id="i-send" viewBox="0 0 24 24">
+    <path d="M20 12L4 4l3 8-3 8 16-8zM7 12h6" />
+  </symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24">
+    <path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4" />
+  </symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24">
+    <path d="M6 9l6 6 6-6" />
+  </symbol>
+</svg>
+
+<div class="layout" [class.has-result]="comparison() || loading()">
+  <!-- ── צ'אט ─────────────────────────────────────────────────────────── -->
+  <section class="panel chat">
     <header class="bar">
       <h2>שיחה עם היועץ</h2>
-      <button class="ghost" (click)="newChat()">שיחה חדשה</button>
+      <button class="btn ghost sm" type="button" (click)="newChat()">שיחה חדשה</button>
     </header>
 
-    <div class="messages">
-      @if (messages().length === 0) {
-        <p class="hint">
-          שלום! אפשר לשאול למשל: "אני שוקל לעבור לרכב חשמלי, כמה זה ישנה לי בנטו?"
-        </p>
+    <div class="messages" #list role="log" aria-live="polite" [attr.aria-busy]="loading() || busy()">
+      @if (loading()) {
+        <div class="msg bot sk" aria-hidden="true">
+          <span class="skeleton line"></span><span class="skeleton line short"></span>
+        </div>
+        <div class="msg user sk" aria-hidden="true"><span class="skeleton line short"></span></div>
+        <div class="msg bot sk" aria-hidden="true"><span class="skeleton line"></span></div>
+      } @else if (messages().length === 0 && !failed()) {
+        <div class="empty">
+          <p class="hint">
+            שלום! אפשר לשאול למשל: "אני שוקל לעבור לרכב חשמלי, כמה זה ישנה לי בנטו?"
+          </p>
+          <div class="suggestions">
+            @for (s of suggestions; track s) {
+              <button class="chip" type="button" (click)="suggest(s)">{{ s }}</button>
+            }
+          </div>
+        </div>
       }
+
       @for (m of messages(); track $index) {
-        <div class="msg" [class.user]="m.role === 'user'">{{ clean(m.text) }}</div>
+        <div class="msg" [class.user]="m.role === 'user'" [class.bot]="m.role === 'bot'">{{ clean(m.text) }}</div>
       }
+
       @if (busy()) {
-        <div class="msg typing">חושב...</div>
+        <div class="msg bot pending">
+          <span class="typing">
+            הבוט מקליד
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </span>
+          <span class="skeleton line" aria-hidden="true"></span>
+          <span class="skeleton line short" aria-hidden="true"></span>
+        </div>
       }
-      <div #end></div>
+
+      @if (failed(); as f) {
+        <div class="msg bot error" role="alert">
+          <span>{{ f.text }}</span>
+          <button class="btn ghost sm" type="button" (click)="retry()">
+            <svg class="icon" aria-hidden="true"><use href="#i-retry" /></svg>
+            לנסות שוב
+          </button>
+        </div>
+      }
     </div>
 
-    <div class="composer">
+    <form class="composer" (submit)="$event.preventDefault(); send()">
       <input
+        #input
+        class="field"
         type="text"
         placeholder="כתבי הודעה..."
+        aria-label="הודעה"
         [value]="draft()"
         (input)="draft.set($any($event.target).value)"
-        (keydown.enter)="send()"
       />
-      <button (click)="send()" [disabled]="busy() || !draft().trim()">שליחה</button>
-    </div>
+      <button class="btn primary" type="submit" [disabled]="busy() || !draft().trim()">
+        <svg class="icon flip" aria-hidden="true"><use href="#i-send" /></svg>
+        שליחה
+      </button>
+    </form>
   </section>
 
-  @if (comparison(); as c) {
-    <section class="compare">
-      <h2>ההשוואה</h2>
-      @if (c.reason) {
-        <p class="reason">זכאות: {{ c.reason }}</p>
-      }
+  <!-- ── פאנל ההחלטה ──────────────────────────────────────────────────── -->
+  @if (loading()) {
+    <section class="decision" aria-busy="true">
+      <div class="panel hero" aria-hidden="true">
+        <span class="skeleton" style="inline-size: 40%; block-size: 14px"></span>
+        <span class="skeleton" style="inline-size: 60%; block-size: 40px; margin-block: 12px"></span>
+        <span class="skeleton" style="inline-size: 30%; block-size: 24px; border-radius: 999px"></span>
+      </div>
+      <div class="cols" aria-hidden="true">
+        @for (i of [0, 1]; track i) {
+          <div class="panel col">
+            @for (j of [0, 1, 2, 3]; track j) {
+              <span class="skeleton" style="block-size: 16px; margin-block: 14px"></span>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  } @else if (comparison(); as c) {
+    <section class="decision" aria-labelledby="decision-title">
+      <h2 id="decision-title" class="sr-only">ההשוואה</h2>
 
-      <table>
-        <thead>
-          <tr>
-            <th></th>
-            <th>היום</th>
-            <th>חלופה</th>
-          </tr>
-        </thead>
-        <tbody>
-          @if (c.details; as d) {
-            <tr>
-              <td>רכב</td>
-              <td>{{ d.today.label }}</td>
-              <td>{{ d.alt.label }}</td>
-            </tr>
-            @if (d.today.cost || d.alt.cost) {
-              <tr>
-                <td>עלות לחברה (תקציב {{ d.budget | number: '1.0-0' }} ₪)</td>
-                <td>{{ d.today.cost ? (d.today.cost | number: '1.0-0') + ' ₪' : '—' }}</td>
-                <td>{{ d.alt.cost ? (d.alt.cost | number: '1.0-0') + ' ₪' : '—' }}</td>
-              </tr>
-            }
-            <tr>
-              <td>שווי שימוש</td>
-              <td>{{ d.today.value_of_use | number: '1.0-0' }} ₪</td>
-              <td>{{ d.alt.value_of_use | number: '1.0-0' }} ₪</td>
-            </tr>
-            <tr>
-              <td>השתתפות שלך</td>
-              <td>{{ d.today.participation | number: '1.0-0' }} ₪</td>
-              <td>{{ d.alt.participation | number: '1.0-0' }} ₪</td>
-            </tr>
-            @if (d.today.electric_refund || d.alt.electric_refund) {
-              <tr>
-                <td>החזר חשמל (נטו)</td>
-                <td>{{ d.today.electric_refund | number: '1.0-0' }} ₪</td>
-                <td>{{ d.alt.electric_refund | number: '1.0-0' }} ₪</td>
-              </tr>
-            }
-            @if (d.today.maintenance || d.alt.maintenance) {
-              <tr>
-                <td>אחזקת רכב (חייבת במס)</td>
-                <td>{{ d.today.maintenance | number: '1.0-0' }} ₪</td>
-                <td>{{ d.alt.maintenance | number: '1.0-0' }} ₪</td>
-              </tr>
-            }
-            @if (d.alt.family_share) {
-              <tr>
-                <td>חלקך בפער המסלול המשפחתי</td>
-                <td>—</td>
-                <td>{{ d.alt.family_share | number: '1.0-0' }} ₪</td>
-              </tr>
-            }
-          }
-          <tr>
-            <td>מס הכנסה</td>
-            <td>{{ c.today.tax | number: '1.0-0' }} ₪</td>
-            <td>{{ c.alt.tax | number: '1.0-0' }} ₪</td>
-          </tr>
-          <tr>
-            <td>ביטוח לאומי ובריאות</td>
-            <td>{{ c.today.ni_health | number: '1.0-0' }} ₪</td>
-            <td>{{ c.alt.ni_health | number: '1.0-0' }} ₪</td>
-          </tr>
-          <tr class="main">
-            <td>נטו חודשי</td>
-            <td>{{ c.today.net | number: '1.0-0' }} ₪</td>
-            <td>{{ c.alt.net | number: '1.0-0' }} ₪</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="diff" [class.pos]="c.diff >= 0" [class.neg]="c.diff < 0">
-        הפרש בנטו החודשי: <strong>{{ signed(c.diff) }} ₪</strong>
+      <!-- כרטיס מסכם -->
+      <div class="panel hero">
+        <div class="hero-label">
+          נטו חודשי
+          @if (c.details; as d) { · {{ d.alt.label }} }
+        </div>
+        <div class="hero-net">{{ c.alt.net | number: '1.0-0' }} <span class="cur">₪</span></div>
+        <div class="hero-meta">
+          <span class="pill" [class.pos]="c.diff >= 0" [class.neg]="c.diff < 0">
+            הפרש <bdi dir="ltr">{{ signed(c.diff) }}</bdi> ₪
+          </span>
+          <span class="muted">היום: {{ c.today.net | number: '1.0-0' }} ₪</span>
+        </div>
+        @if (c.reason) {
+          <p class="reason">זכאות: {{ c.reason }}</p>
+        }
       </div>
 
-      @if (c.explanation) {
-        <div class="why"><strong>מה השתנה:</strong> {{ c.explanation }}</div>
+      <!-- היום / חלופה -->
+      @if (c.details; as d) {
+        <div class="cols">
+          @for (col of [
+            { title: 'היום', s: d.today, n: c.today.net },
+            { title: 'חלופה', s: d.alt, n: c.alt.net }
+          ]; track col.title) {
+            <div class="panel col" [class.alt]="col.title === 'חלופה'">
+              <h3>{{ col.title }}</h3>
+              <ul class="rows">
+                <li>
+                  <svg class="icon" aria-hidden="true"><use href="#i-car" /></svg>
+                  <span class="k">רכב</span>
+                  <span class="v">{{ col.s.label }}</span>
+                </li>
+                @if (d.today.cost || d.alt.cost) {
+                  <li>
+                    <svg class="icon" aria-hidden="true"><use href="#i-coins" /></svg>
+                    <span class="k">עלות לחברה <small>(תקציב {{ d.budget | number: '1.0-0' }} ₪)</small></span>
+                    <span class="v">{{ col.s.cost ? (col.s.cost | number: '1.0-0') + ' ₪' : '—' }}</span>
+                  </li>
+                }
+                <li>
+                  <svg class="icon" aria-hidden="true"><use href="#i-tag" /></svg>
+                  <span class="k">שווי שימוש</span>
+                  <span class="v">{{ col.s.value_of_use | number: '1.0-0' }} ₪</span>
+                </li>
+                <li>
+                  <svg class="icon" aria-hidden="true"><use href="#i-wallet" /></svg>
+                  <span class="k">השתתפות שלך</span>
+                  <span class="v">{{ col.s.participation | number: '1.0-0' }} ₪</span>
+                </li>
+                @if (d.today.electric_refund || d.alt.electric_refund) {
+                  <li>
+                    <svg class="icon" aria-hidden="true"><use href="#i-bolt" /></svg>
+                    <span class="k">החזר חשמל (נטו)</span>
+                    <span class="v">{{ col.s.electric_refund | number: '1.0-0' }} ₪</span>
+                  </li>
+                }
+                @if (d.today.maintenance || d.alt.maintenance) {
+                  <li>
+                    <svg class="icon" aria-hidden="true"><use href="#i-wrench" /></svg>
+                    <span class="k">אחזקת רכב (חייבת במס)</span>
+                    <span class="v">{{ col.s.maintenance | number: '1.0-0' }} ₪</span>
+                  </li>
+                }
+                @if (d.alt.family_share) {
+                  <li>
+                    <svg class="icon" aria-hidden="true"><use href="#i-family" /></svg>
+                    <span class="k">חלקך בפער המסלול המשפחתי</span>
+                    <span class="v">{{ col.s.family_share ? (col.s.family_share | number: '1.0-0') + ' ₪' : '—' }}</span>
+                  </li>
+                }
+                <li class="net">
+                  <span class="k">נטו חודשי</span>
+                  <span class="v">{{ col.n | number: '1.0-0' }} ₪</span>
+                </li>
+              </ul>
+            </div>
+          }
+        </div>
       }
+
+      @if (c.explanation) {
+        <p class="panel why"><strong>מה השתנה:</strong> {{ c.explanation }}</p>
+      }
+
+      <details class="panel full">
+        <summary>
+          פירוט מלא
+          <svg class="icon chev" aria-hidden="true"><use href="#i-chevron" /></svg>
+        </summary>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col"><span class="sr-only">רכיב</span></th>
+              <th scope="col">היום</th>
+              <th scope="col">חלופה</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">מס הכנסה</th>
+              <td>{{ c.today.tax | number: '1.0-0' }} ₪</td>
+              <td>{{ c.alt.tax | number: '1.0-0' }} ₪</td>
+            </tr>
+            <tr>
+              <th scope="row">ביטוח לאומי ובריאות</th>
+              <td>{{ c.today.ni_health | number: '1.0-0' }} ₪</td>
+              <td>{{ c.alt.ni_health | number: '1.0-0' }} ₪</td>
+            </tr>
+            <tr class="total">
+              <th scope="row">נטו חודשי</th>
+              <td>{{ c.today.net | number: '1.0-0' }} ₪</td>
+              <td>{{ c.alt.net | number: '1.0-0' }} ₪</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
     </section>
   }
 </div>

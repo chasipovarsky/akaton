@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sqlite3
 from contextlib import contextmanager
@@ -6,7 +7,9 @@ from pathlib import Path
 
 from google.genai import types
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.db"
+_default_db = Path(__file__).resolve().parent.parent / "data" / "app.db"
+DB_PATH = Path(os.getenv("DB_PATH", str(_default_db)))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 @contextmanager

@@ -1,10 +1,178 @@
-/* You can add global styles to this file, and also import other style files */
+/* ── מערכת עיצוב ─────────────────────────────────────────────────────────── */
+:root {
+  /* צבעים */
+  --c-primary: #3b2a7a;
+  --c-primary-hover: #2e2062;
+  --c-primary-soft: #ece8fb;
+  --c-primary-line: #c9c0ec;
+  --c-bg: #f4f2fb;
+  --c-surface: #ffffff;
+  --c-surface-alt: #f8f7fd;
+  --c-text: #231f35;
+  --c-muted: #5f5878;          /* ניגודיות ≈6.6:1 על לבן */
+  --c-line: #e6e2f3;
+  --c-pos: #146c3c;
+  --c-pos-bg: #e3f3e9;
+  --c-neg: #a8281c;
+  --c-neg-bg: #fbe9e7;
+  --c-warn-bg: #fff6e0;
+  --c-warn-line: #f0d48a;
+  --c-warn-text: #664d03;
+  --c-skeleton: #e9e6f4;
+  --c-skeleton-shine: #f5f3fb;
+  --c-focus: #6c4fe0;
+
+  /* רדיוסים */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* צללים */
+  --shadow-sm: 0 1px 2px rgba(35, 31, 53, 0.06);
+  --shadow-md: 0 2px 10px rgba(59, 42, 122, 0.08);
+
+  /* מרווחים */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+
+  /* תנועה */
+  --t-fast: 150ms;
+  --t-base: 200ms;
+
+  --font: system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
 body {
   margin: 0;
-  font-family: 'Segoe UI', Arial, sans-serif;
-  background: #f4f2fb;
-  color: #231f35;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-variant-emoji: text;
+  -webkit-font-smoothing: antialiased;
 }
-body { font-variant-emoji: text; }
-button { font-family: inherit; cursor: pointer; }
-input { font-family: inherit; }
+
+button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* focus ring גלוי — רק בניווט מקלדת */
+:focus-visible {
+  outline: 3px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── רכיבים משותפים ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-block-size: 40px;
+  padding-inline: var(--s-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-weight: 600;
+  transition: background-color var(--t-fast), border-color var(--t-fast), opacity var(--t-fast);
+
+  &.primary {
+    background: var(--c-primary);
+    color: #fff;
+    &:hover:not(:disabled) { background: var(--c-primary-hover); }
+    &:disabled { opacity: 0.45; }
+  }
+  &.ghost {
+    background: transparent;
+    border-color: var(--c-primary-line);
+    color: var(--c-primary);
+    &:hover { background: var(--c-primary-soft); }
+  }
+  &.sm { min-block-size: 32px; padding-inline: var(--s-3); font-size: 0.875rem; }
+}
+
+.panel {
+  background: var(--c-surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--s-4);
+}
+
+.field {
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding-block: var(--s-2);
+  padding-inline: var(--s-3);
+  border: 1px solid var(--c-primary-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  transition: border-color var(--t-fast);
+  &:hover { border-color: var(--c-primary); }
+  &:focus-visible { outline-offset: 0; border-color: var(--c-primary); }
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding-block: 2px;
+  padding-inline: var(--s-3);
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  font-size: 0.95rem;
+  &.pos { background: var(--c-pos-bg); color: var(--c-pos); }
+  &.neg { background: var(--c-neg-bg); color: var(--c-neg); }
+}
+
+.skeleton {
+  display: block;
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--c-skeleton) 25%, var(--c-skeleton-shine) 50%, var(--c-skeleton) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shine 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shine {
+  from { background-position: 100% 0; }
+  to   { background-position: -100% 0; }
+}
+
+.icon {
+  inline-size: 18px;
+  block-size: 18px;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* כיבוד העדפת תנועה מופחתת */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

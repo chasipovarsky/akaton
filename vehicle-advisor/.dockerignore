@@ -1,0 +1,12 @@
+venv/
+node_modules/
+.env
+backend/data/app.db
+backend/data/vehicle_value_2026.csv
+.git/
+__pycache__/
+.angular/
+frontend/dist/
+.kiro/
+*.pyc
+.pytest_cache/

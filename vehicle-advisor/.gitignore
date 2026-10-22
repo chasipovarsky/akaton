@@ -6,4 +6,9 @@ node_modules/
 .angular/
 backend/data/app.db
 backend/data/*_peek.txt
+# CSV גולמי גדול מדי — מכווצים ל-.gz עם scripts/compress_csv.py
 backend/data/vehicle_value_2026.csv
+# קובץ gz מותר ב-git (≈4MB)
+!backend/data/vehicle_value_2026.csv.gz
+dist/
+.vscode/
