@@ -8,7 +8,15 @@
   background: var(--c-primary);
   color: #fff;
 
-  .brand { font-weight: 700; font-size: 1.05rem; margin-inline-end: auto; }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-inline-end: auto;
+  }
+  .logo { block-size: 32px; inline-size: auto; object-fit: contain; }
   a {
     color: #e4def9;
     text-decoration: none;
