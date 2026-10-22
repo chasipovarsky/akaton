@@ -170,7 +170,7 @@ def rank_endpoint(req: RankRequest):
     missing = [k for k in REQUIRED if k not in profile]
     if missing:
         return {"status": "missing_profile", "missing": missing}
-    return rank_options(profile)
+    return rank_options(profile, with_turning_point=True)
 
 
 @api.get("/chat/{session_id}/state")

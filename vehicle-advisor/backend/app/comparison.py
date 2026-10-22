@@ -29,10 +29,12 @@ def check_eligibility(emp: dict, car: dict, rules: dict) -> tuple[bool, str]:
     return False, "הרכב מקבוצה גבוהה מהקבוצה שלך"
 
 
-def build_alternative(emp: dict, car_id: str, participation: float | None):
-    """מחזיר (alt_dict, מידע) או (None, מה חסר)."""
-    rules = load_rules()
-    car = _find_car(load_catalogue(), car_id)
+def build_alternative(emp: dict, car_id: str, participation: float | None,
+                      rules: dict | None = None, catalogue: list | None = None):
+    """מחזיר (alt_dict, מידע) או (None, מה חסר).
+    rules / catalogue — אופציונלי, כדי לא לקרוא את הקבצים שוב בלולאה."""
+    rules = rules or load_rules()
+    car = _find_car(catalogue or load_catalogue(), car_id)
     if car is None:
         return None, {"error": "רכב לא נמצא בקטלוג"}
 
@@ -169,48 +171,97 @@ def run_comparison(emp: dict, target: str, participation: float | None = None) -
     }
 
 
-def rank_options(emp: dict) -> dict:
-    """כל החלופות שהעובד זכאי להן (רכבים + ויתור), ממוינות מהנטו הגבוה לנמוך.
-    ההשתתפות בכל רכב היא ברירת המחדל מהקטלוג — לא ההשתתפות בפועל."""
-    rules = load_rules()
-    catalogue = load_catalogue()
-
+def _rank_candidates(emp: dict, rules: dict, catalogue: list):
+    """בונה פעם אחת את תרחיש היום ואת כל החלופות שהעובד זכאי להן.
+    זכאות, שווי שימוש והשתתפות לא תלויים בשכר — לכן אפשר לחשב נטו שוב ושוב בלי לבנות מחדש."""
     today, miss = _today_scenario(emp, catalogue, rules)
     if miss:
-        return {"status": "missing", **miss}
-
-    options = []
+        return None, miss
+    cands = []
     for car in catalogue:
         if car["id"] == emp.get("current_car_id"):
             continue
         ok, _ = check_eligibility(emp, car, rules)
         if not ok:
             continue
-        res = run_comparison(emp, car["id"], car["default_participation"])
-        if res["status"] == "ok":
-            options.append({
-                "target": car["id"],
-                "label": res["details"]["alt"]["label"],
-                "drive": car["drive"],
-                "participation": car["default_participation"],
-                "net": res["alt"]["net"],
-                "diff": res["diff"],
-            })
-
+        alt, _ = build_alternative(emp, car["id"], car["default_participation"],
+                                   rules=rules, catalogue=catalogue)
+        if alt is not None:
+            cands.append((car["id"], alt, car["drive"], car["default_participation"]))
     waiver, _ = build_waiver(emp)
     if waiver is not None and not emp.get("current_maintenance"):
-        res = run_comparison(emp, "WAIVER")
-        if res["status"] == "ok":
-            options.append({
-                "target": "WAIVER",
-                "label": res["details"]["alt"]["label"],
-                "drive": None,
-                "participation": 0,
-                "net": res["alt"]["net"],
-                "diff": res["diff"],
-            })
+        cands.append(("WAIVER", waiver, None, 0))
+    return today, cands
 
-    options.sort(key=lambda o: o["net"], reverse=True)
-    today_net = options[0]["net"] - options[0]["diff"] if options else None
-    return {"status": "ok", "today_net": today_net,
-            "today_label": today.get("label", ""), "options": options}
+
+def _rank(emp: dict, today: dict, cands: list, rules: dict) -> tuple[list, int | None]:
+    """נטו לכל חלופה — אותו compare ואותו עיגול כמו run_comparison."""
+    options, today_net = [], None
+    for target, alt, drive, participation in cands:
+        res = compare(emp, today, alt, rules)
+        today_net = round(res["today"]["net"])
+        options.append({
+            "target": target,
+            "label": alt["label"],
+            "drive": drive,
+            "participation": participation,
+            "net": round(res["alt"]["net"]),
+            "diff": round(res["diff"]),
+        })
+    options.sort(key=lambda o: o["net"], reverse=True)  # מיון יציב: בתיקו — סדר הקטלוג
+    return options, today_net
+
+
+def _with_raise(emp: dict, extra: float) -> dict:
+    # הברוטו = בסיס + עמלות + בונוס; העלאה נכנסת לבסיס (ומשפיעה גם על פנסיה וקרן השתלמות)
+    return {**emp, "base": emp["base"] + extra}
+
+
+def _turning_point(emp: dict, today: dict, cands: list, rules: dict,
+                   max_pct: float = 1.0, step_pct: float = 0.05) -> dict | None:
+    """העלאת הברוטו הקטנה ביותר (בשקלים שלמים, עד +100%) שבה האפשרות הראשונה בדירוג משתנה.
+    סריקה בצעדים של 5% מהברוטו, ואז חיפוש בינארי בתוך הצעד שבו נמצא השינוי.
+    מגבלה: שינוי שמתהפך בחזרה בתוך צעד אחד לא יימצא."""
+    if not cands:
+        return None
+
+    def best(extra: int) -> dict:
+        return _rank(_with_raise(emp, extra), today, cands, rules)[0][0]
+
+    gross = emp["base"] + emp["commissions"] + emp["bonus"]
+    limit = int(round(gross * max_pct))
+    step = max(1, int(round(gross * step_pct)))
+    first = best(0)["target"]
+
+    lo = 0
+    while lo < limit:
+        hi = min(lo + step, limit)
+        if best(hi)["target"] != first:
+            while hi - lo > 1:  # best(lo) == first, best(hi) != first
+                mid = (lo + hi) // 2
+                if best(mid)["target"] == first:
+                    lo = mid
+                else:
+                    hi = mid
+            new = best(hi)
+            return {"extra_gross": hi, "new_best": new["label"], "new_best_target": new["target"]}
+        lo = hi
+    return None
+
+
+def rank_options(emp: dict, with_turning_point: bool = False) -> dict:
+    """כל החלופות שהעובד זכאי להן (רכבים + ויתור), ממוינות מהנטו הגבוה לנמוך.
+    ההשתתפות בכל רכב היא ברירת המחדל מהקטלוג — לא ההשתתפות בפועל."""
+    rules = load_rules()
+    catalogue = load_catalogue()
+
+    today, cands = _rank_candidates(emp, rules, catalogue)
+    if today is None:
+        return {"status": "missing", **cands}
+
+    options, today_net = _rank(emp, today, cands, rules)
+    out = {"status": "ok", "today_net": today_net,
+           "today_label": today.get("label", ""), "options": options}
+    if with_turning_point:
+        out["turning_point"] = _turning_point(emp, today, cands, rules)
+    return out

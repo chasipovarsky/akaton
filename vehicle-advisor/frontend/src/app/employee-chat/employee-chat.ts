@@ -94,6 +94,11 @@ export class EmployeeChat implements OnInit {
     return typeof r === 'object' ? r : null;
   }
 
+  // עיגול ל-100 הקרוב (לפחות 100, כדי לא להציג "כ-0 ₪")
+  round100(n: number): number {
+    return Math.max(100, Math.round(n / 100) * 100);
+  }
+
   suggest(text: string) {
     this.draft.set(text);
     this.focusInput();

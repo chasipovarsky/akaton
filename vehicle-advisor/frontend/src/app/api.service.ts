@@ -69,6 +69,8 @@ export interface RankResult {
   today_label?: string;
   options?: RankOption[];
   missing?: string | string[];
+  // העלאת ברוטו מינימלית שמשנה את האפשרות הראשונה; null = אין שינוי עד +100%
+  turning_point?: { extra_gross: number; new_best: string; new_best_target: string } | null;
 }
 
 export interface AgentQuestion {

@@ -125,6 +125,16 @@ button:disabled { cursor: not-allowed; }
   &:hover { background: var(--c-primary-soft); color: var(--c-primary); }
 }
 
+/* שגיאה רכה עם כפתור "לנסות שוב" */
+.soft-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--c-neg);
+  margin: 0;
+}
+
 .panel {
   background: var(--c-surface);
   border-radius: var(--r-lg);

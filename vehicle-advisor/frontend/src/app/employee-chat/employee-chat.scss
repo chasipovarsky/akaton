@@ -167,12 +167,14 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
   .best th { font-weight: 700; }
   .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   .ev { color: var(--c-primary); vertical-align: -3px; inline-size: 15px; }
+  .turn {
+    margin-block: var(--s-3) 0;
+    padding: var(--s-2) var(--s-3);
+    border-radius: var(--r-md);
+    background: var(--c-primary-soft);
+  }
   .note { margin-block: var(--s-3) 0; font-size: 0.82rem; color: var(--c-muted); }
   .muted { margin-block: 0 var(--s-2); }
-}
-.soft-error {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2);
-  color: var(--c-neg); margin: 0;
 }
 
 /* ── פאנל ההחלטה ───────────────────────────────────────────────────────── */
