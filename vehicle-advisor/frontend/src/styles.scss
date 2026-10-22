@@ -111,6 +111,20 @@ button:disabled { cursor: not-allowed; }
   &.sm { min-block-size: 32px; padding-inline: var(--s-3); font-size: 0.875rem; }
 }
 
+/* כפתור עם אייקון בלבד — חייב aria-label */
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-muted);
+  transition: background-color var(--t-fast);
+  &:hover { background: var(--c-primary-soft); color: var(--c-primary); }
+}
+
 .panel {
   background: var(--c-surface);
   border-radius: var(--r-lg);

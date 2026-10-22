@@ -54,6 +54,23 @@ export interface ChatState {
   comparison: Comparison | null;
 }
 
+export interface RankOption {
+  target: string;
+  label: string;
+  drive: string | null;
+  participation: number;
+  net: number;
+  diff: number;
+}
+
+export interface RankResult {
+  status: 'ok' | 'missing' | 'missing_profile';
+  today_net?: number | null;
+  today_label?: string;
+  options?: RankOption[];
+  missing?: string | string[];
+}
+
 export interface AgentQuestion {
   id: number;
   session_id: string;
@@ -73,6 +90,10 @@ export class Api {
 
   state(sessionId: string): Observable<ChatState> {
     return this.http.get<ChatState>(`${BASE}/chat/${sessionId}/state`);
+  }
+
+  rank(sessionId: string): Observable<RankResult> {
+    return this.http.post<RankResult>(`${BASE}/rank`, { session_id: sessionId });
   }
 
   questions(openOnly = false): Observable<AgentQuestion[]> {

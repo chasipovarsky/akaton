@@ -1,6 +1,6 @@
 import { Component, ElementRef, OnInit, inject, signal, viewChild } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { Api, ChatMsg, Comparison } from '../api.service';
+import { Api, ChatMsg, Comparison, RankResult } from '../api.service';
 
 @Component({
   selector: 'app-employee-chat',
@@ -25,6 +25,8 @@ export class EmployeeChat implements OnInit {
   loading = signal(true);
   // הודעה שנכשלה בשליחה — מאפשרת "לנסות שוב"
   failed = signal<{ text: string; sent: string } | null>(null);
+  // "מה הכי משתלם לי?" — null = סגור
+  ranking = signal<RankResult | 'loading' | 'error' | null>(null);
   listRef = viewChild<ElementRef<HTMLElement>>('list');
   inputRef = viewChild<ElementRef<HTMLInputElement>>('input');
 
@@ -79,6 +81,19 @@ export class EmployeeChat implements OnInit {
     this.focusInput();
   }
 
+  rank() {
+    this.ranking.set('loading');
+    this.api.rank(this.sessionId()).subscribe({
+      next: (r) => this.ranking.set(r),
+      error: () => this.ranking.set('error'),
+    });
+  }
+
+  rankResult(): RankResult | null {
+    const r = this.ranking();
+    return typeof r === 'object' ? r : null;
+  }
+
   suggest(text: string) {
     this.draft.set(text);
     this.focusInput();
@@ -91,6 +106,7 @@ export class EmployeeChat implements OnInit {
     this.messages.set([]);
     this.comparison.set(null);
     this.failed.set(null);
+    this.ranking.set(null);
   }
 
   clean(t: string): string {

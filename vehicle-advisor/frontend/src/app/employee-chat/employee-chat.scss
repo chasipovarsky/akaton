@@ -155,6 +155,26 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
 /* חץ השליחה פונה שמאלה ב-RTL */
 .flip { transform: scaleX(-1); }
 
+.bar-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+
+/* ── מה הכי משתלם לי? ──────────────────────────────────────────────────── */
+.side { display: flex; flex-direction: column; gap: var(--s-4); min-inline-size: 0; }
+
+.rank {
+  overflow-x: auto;
+  .rank-head { display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--s-2); }
+  .best { background: var(--c-pos-bg); }
+  .best th { font-weight: 700; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ev { color: var(--c-primary); vertical-align: -3px; inline-size: 15px; }
+  .note { margin-block: var(--s-3) 0; font-size: 0.82rem; color: var(--c-muted); }
+  .muted { margin-block: 0 var(--s-2); }
+}
+.soft-error {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2);
+  color: var(--c-neg); margin: 0;
+}
+
 /* ── פאנל ההחלטה ───────────────────────────────────────────────────────── */
 .decision {
   display: flex;

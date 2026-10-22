@@ -167,3 +167,50 @@ def run_comparison(emp: dict, target: str, participation: float | None = None) -
         },
         "inputs": {"today": today, "alt": alt},
     }
+
+
+def rank_options(emp: dict) -> dict:
+    """כל החלופות שהעובד זכאי להן (רכבים + ויתור), ממוינות מהנטו הגבוה לנמוך.
+    ההשתתפות בכל רכב היא ברירת המחדל מהקטלוג — לא ההשתתפות בפועל."""
+    rules = load_rules()
+    catalogue = load_catalogue()
+
+    today, miss = _today_scenario(emp, catalogue, rules)
+    if miss:
+        return {"status": "missing", **miss}
+
+    options = []
+    for car in catalogue:
+        if car["id"] == emp.get("current_car_id"):
+            continue
+        ok, _ = check_eligibility(emp, car, rules)
+        if not ok:
+            continue
+        res = run_comparison(emp, car["id"], car["default_participation"])
+        if res["status"] == "ok":
+            options.append({
+                "target": car["id"],
+                "label": res["details"]["alt"]["label"],
+                "drive": car["drive"],
+                "participation": car["default_participation"],
+                "net": res["alt"]["net"],
+                "diff": res["diff"],
+            })
+
+    waiver, _ = build_waiver(emp)
+    if waiver is not None and not emp.get("current_maintenance"):
+        res = run_comparison(emp, "WAIVER")
+        if res["status"] == "ok":
+            options.append({
+                "target": "WAIVER",
+                "label": res["details"]["alt"]["label"],
+                "drive": None,
+                "participation": 0,
+                "net": res["alt"]["net"],
+                "diff": res["diff"],
+            })
+
+    options.sort(key=lambda o: o["net"], reverse=True)
+    today_net = options[0]["net"] - options[0]["diff"] if options else None
+    return {"status": "ok", "today_net": today_net,
+            "today_label": today.get("label", ""), "options": options}

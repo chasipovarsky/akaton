@@ -13,8 +13,8 @@ from pydantic import BaseModel
 
 from app import store
 from app.config import load_catalogue, load_rules
-from app.comparison import run_comparison
-from app.agent import chat as agent_chat
+from app.comparison import run_comparison, rank_options
+from app.agent import chat as agent_chat, REQUIRED
 
 log = logging.getLogger("vehicle_advisor")
 
@@ -98,6 +98,10 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class RankRequest(BaseModel):
+    session_id: str
+
+
 class AnswerRequest(BaseModel):
     question_id: int
     answer: str
@@ -156,6 +160,17 @@ def chat_endpoint(req: ChatRequest, request: Request):
         # הפרטים נרשמים בלוג השרת בלבד — לא חוזרים למשתמש
         log.exception("chat failed")
         return {"reply": "אירעה תקלה זמנית. אפשר לנסות שוב בעוד רגע."}
+
+
+@api.post("/rank")
+def rank_endpoint(req: RankRequest):
+    """'מה הכי משתלם לי?' — דירוג כל החלופות לפי הפרופיל שנאסף בשיחה. בלי מודל שפה."""
+    _require_sid(req.session_id)
+    profile, _ = store.load_session(req.session_id)
+    missing = [k for k in REQUIRED if k not in profile]
+    if missing:
+        return {"status": "missing_profile", "missing": missing}
+    return rank_options(profile)
 
 
 @api.get("/chat/{session_id}/state")
