@@ -1,12 +1,13 @@
 .demo-banner {
-  background: var(--c-warn-bg);
-  color: var(--c-warn-text);
+  background: var(--c-primary-soft);
+  color: var(--c-muted);           /* ניגודיות ≈5.6:1 על הלבנדר */
   text-align: center;
-  padding-block: var(--s-2);
+  padding-block: var(--s-1);
   padding-inline: var(--s-4);
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-block-end: 1px solid var(--c-warn-line);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  font-weight: 500;
+  border-block-end: 1px solid var(--c-line);
 }
 
 .top {
