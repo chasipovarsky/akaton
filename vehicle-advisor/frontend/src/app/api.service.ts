@@ -36,6 +36,8 @@ export interface Comparison {
   diff: number;
   explanation?: string;
   details?: Details;
+  // מהשוואה ישירה (בלי הבוט): catalogue_default = ההשתתפות לפי ברירת המחדל בקטלוג
+  participation_source?: 'employee' | 'catalogue_default' | null;
 }
 
 // "בינתיים: מצב היום" — חסר נתון לחלופה והשאלה נשלחה לנציג. אין מספרים של החלופה.
@@ -92,6 +94,26 @@ export interface RankResult {
   turning_point?: { extra_gross: number; new_best: string; new_best_target: string } | null;
 }
 
+// רכב שהעובדת זכאית לו (או WAIVER) — לבורר "השוואה לרכב" בלי הבוט
+export interface CarOption {
+  id: string;
+  label: string;
+  group: string | null;
+  drive: string | null;
+  company_cost: number;
+  default_participation: number;
+}
+
+export interface CarsResult {
+  status: 'ok' | 'missing_profile';
+  cars: CarOption[];
+}
+
+export type CompareResult =
+  | (Comparison & { status: 'ok' })
+  | { status: 'missing_profile'; missing: string[] }
+  | { status: 'not_eligible' | 'missing' | 'error'; reason?: string; error?: string };
+
 export interface DemoEmployee {
   id: string;
   title: string;
@@ -123,6 +145,14 @@ export class Api {
 
   state(sessionId: string): Observable<ChatState> {
     return this.http.get<ChatState>(`${BASE}/chat/${sessionId}/state`);
+  }
+
+  cars(sessionId: string): Observable<CarsResult> {
+    return this.http.get<CarsResult>(`${BASE}/cars`, { params: { session_id: sessionId } });
+  }
+
+  compare(sessionId: string, carId: string): Observable<CompareResult> {
+    return this.http.post<CompareResult>(`${BASE}/compare`, { session_id: sessionId, car_id: carId });
   }
 
   demoEmployees(): Observable<DemoEmployee[]> {

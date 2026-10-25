@@ -171,6 +171,31 @@ def run_comparison(emp: dict, target: str, participation: float | None = None) -
     }
 
 
+def eligible_options(emp: dict) -> list[dict]:
+    """הרכבים שהעובדת זכאית להם (בלי הרכב הנוכחי), ואם העיסוק מאפשר — גם ויתור.
+    רק זכאות מהקטלוג; בלי שליפת שווי שימוש — מהיר, לבורר בממשק."""
+    rules = load_rules()
+    out = []
+    for car in load_catalogue():
+        if car["id"] == emp.get("current_car_id"):
+            continue
+        ok, _ = check_eligibility(emp, car, rules)
+        if ok:
+            out.append({
+                "id": car["id"],
+                "label": _car_label(car),
+                "maker": car["maker"],
+                "group": car["group"],
+                "drive": car["drive"],
+                "company_cost": car["company_cost"],
+                "default_participation": car["default_participation"],
+            })
+    if not emp.get("current_maintenance") and build_waiver(emp)[0] is not None:
+        out.append({"id": "WAIVER", "label": "ויתור על רכב", "maker": None, "group": None,
+                    "drive": None, "company_cost": 0, "default_participation": 0})
+    return out
+
+
 def today_snapshot(emp: dict, target: str | None = None) -> dict:
     """'בינתיים: מצב היום' — כשחסר נתון לחלופה (למשל השתתפות) והשאלה נשלחה לנציג.
     מחשב רק את היום; לא ממלא ולא מנחש שום ערך של החלופה."""

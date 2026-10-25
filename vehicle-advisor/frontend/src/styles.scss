@@ -171,6 +171,7 @@ button:disabled { cursor: not-allowed; }
   transition: border-color var(--t-fast);
   &:hover { border-color: var(--c-primary); }
   &:focus-visible { outline-offset: 0; border-color: var(--c-primary); }
+  &.sm { inline-size: auto; max-inline-size: 100%; min-block-size: 32px; padding-block: 2px; font-size: 0.85rem; }
 }
 
 .pill {

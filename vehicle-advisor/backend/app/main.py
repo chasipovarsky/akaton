@@ -16,7 +16,7 @@ from app import store, turns
 from google.genai import types
 
 from app.config import load_catalogue, load_rules, load_demo_employees, warm_cache
-from app.comparison import run_comparison, rank_options
+from app.comparison import run_comparison, rank_options, eligible_options
 from app.agent import chat as agent_chat, REQUIRED, TurnTimeout
 
 TIMEOUT_MSG = "לא הצלחתי לסיים בזמן, אפשר לנסות שוב."
@@ -112,9 +112,9 @@ api = APIRouter(prefix="/api")
 
 
 class CompareRequest(BaseModel):
-    employee: dict
-    target: str
-    participation: float | None = None
+    session_id: str
+    car_id: str                          # מזהה CAR-xx או WAIVER
+    participation: float | None = None   # אם לא נמסר — ההשתתפות ברירת המחדל מהקטלוג
 
 
 class ChatRequest(BaseModel):
@@ -146,9 +146,51 @@ def rules():
     return load_rules()
 
 
+def _profile_missing(profile: dict) -> list[str]:
+    missing = [k for k in REQUIRED if k not in profile]
+    if "current_car_id" not in profile and not profile.get("current_maintenance"):
+        missing.append("current_car")
+    return missing
+
+
+@api.get("/cars")
+def cars_endpoint(session_id: str):
+    """רכבים שהעובדת זכאית להם לפי הפרופיל השמור בשיחה. בלי מודל שפה."""
+    _require_sid(session_id)
+    profile, _ = store.load_session(session_id)
+    if "group" not in profile:
+        return {"status": "missing_profile", "missing": ["group"], "cars": []}
+    return {"status": "ok", "cars": eligible_options(profile)}
+
+
 @api.post("/compare")
-def compare_endpoint(req: CompareRequest):
-    return run_comparison(req.employee, req.target, req.participation)
+def compare_endpoint(req: CompareRequest, request: Request):
+    """השוואה ישירה לרכב מהקטלוג — בלי Gemini, כך שהמערכת עובדת גם כשהמודל איטי או לא זמין.
+    משתמש בפרופיל השמור בשיחה ובאותו run_comparison שהבוט מפעיל."""
+    _require_sid(req.session_id)
+    if not _check_rate(_client_ip(request)):
+        return _rate_limited()
+    if turns.is_busy(req.session_id):
+        return _busy()  # תור של הבוט ישמור בסופו את הפרופיל — לא כותבים במקביל
+    profile, history = store.load_session(req.session_id)
+    missing = _profile_missing(profile)
+    if missing:
+        return {"status": "missing_profile", "missing": missing}
+
+    participation, source = req.participation, "employee"
+    if participation is None and req.car_id != "WAIVER":
+        car = next((c for c in load_catalogue() if c["id"] == req.car_id), None)
+        if car is None:
+            raise HTTPException(status_code=404, detail="רכב לא נמצא בקטלוג")
+        participation, source = car["default_participation"], "catalogue_default"
+
+    res = run_comparison(profile, req.car_id, participation)
+    if res.get("status") == "ok":
+        res["participation_source"] = source if req.car_id != "WAIVER" else None
+        profile["_last_comparison"] = res  # נשמר — אחרי רענון ההשוואה עדיין מוצגת
+        profile.pop("_pending_target", None)
+        store.save_session(req.session_id, profile, history)
+    return res
 
 
 def _rate_limited() -> JSONResponse:

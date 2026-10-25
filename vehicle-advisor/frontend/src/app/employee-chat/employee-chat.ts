@@ -3,7 +3,8 @@ import {
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import {
-  Api, ChatMsg, ChatState, Comparison, DemoEmployee, PendingComparison, QuestionStatus, RankResult,
+  Api, CarOption, ChatMsg, ChatState, Comparison, DemoEmployee, PendingComparison, QuestionStatus,
+  RankResult,
 } from '../api.service';
 
 const POLL_MS = 5000;            // בדיקת תשובת נציג
@@ -50,6 +51,11 @@ export class EmployeeChat implements OnInit, OnDestroy {
   // הודעה שנכשלה בשליחה — מאפשרת "לנסות שוב"
   failed = signal<{ text: string; sent: string } | null>(null);
   demos = signal<DemoEmployee[]>([]);
+  // "השוואה לרכב" — מסלול בלי הבוט, זמין כשהפרופיל טעון
+  cars = signal<CarOption[]>([]);
+  selectedCar = signal('');
+  comparing = signal(false);
+  compareNote = signal('');
   // "מה הכי משתלם לי?" — null = סגור
   ranking = signal<RankResult | 'loading' | 'error' | null>(null);
   listRef = viewChild<ElementRef<HTMLElement>>('list');
@@ -124,6 +130,47 @@ export class EmployeeChat implements OnInit, OnDestroy {
     );
     this.scroll();
     this.syncPolling(s);
+    this.loadCars(); // הבוט אולי השלים את הפרופיל — הבורר מתעדכן
+  }
+
+  // ── השוואה לרכב בלי הבוט ───────────────────────────────────────────────────
+  private loadCars() {
+    const sid = this.sessionId();
+    this.api.cars(sid).subscribe({
+      next: (r) => {
+        if (sid !== this.sessionId()) return;
+        this.cars.set(r.cars);
+        if (!r.cars.some((c) => c.id === this.selectedCar())) {
+          this.selectedCar.set(r.cars[0]?.id ?? '');
+        }
+      },
+      error: () => {}, // הבורר פשוט לא יוצג
+    });
+  }
+
+  compareCar() {
+    const carId = this.selectedCar();
+    if (!carId || this.busy() || this.comparing()) return;
+    this.comparing.set(true);
+    this.compareNote.set('');
+    this.api.compare(this.sessionId(), carId).subscribe({
+      next: (r) => {
+        this.comparing.set(false);
+        if (r.status === 'ok') {
+          this.comparison.set(r);
+        } else if (r.status === 'missing_profile') {
+          this.compareNote.set('חסרים עוד פרטים. אפשר לטעון עובדת לדוגמה או לספר לבוט.');
+        } else if (r.status === 'not_eligible') {
+          this.compareNote.set(`אין זכאות לרכב הזה: ${r.reason ?? ''}`);
+        } else {
+          this.compareNote.set('לא הצלחתי לחשב את ההשוואה לרכב הזה.');
+        }
+      },
+      error: (e) => {
+        this.comparing.set(false);
+        this.compareNote.set(e?.error?.reply ?? 'לא הצלחתי לחשב את ההשוואה. אפשר לנסות שוב.');
+      },
+    });
   }
 
   // ── תשובת נציג: בדיקה אוטומטית והמשך שיחה ────────────────────────────────
@@ -184,8 +231,10 @@ export class EmployeeChat implements OnInit, OnDestroy {
         this.messages.set(s.history);
         this.comparison.set(null);
         this.ranking.set(null);
+        this.compareNote.set('');
         this.busy.set(false);
         this.scroll();
+        this.loadCars();
       },
       error: (e) => {
         const msg = e?.status === 409 ? e.error.reply : 'לא הצלחתי לטעון את העובדת לדוגמה. אפשר לנסות שוב.';
@@ -264,6 +313,8 @@ export class EmployeeChat implements OnInit, OnDestroy {
     this.comparison.set(null);
     this.failed.set(null);
     this.ranking.set(null);
+    this.cars.set([]);
+    this.compareNote.set('');
   }
 
   clean(t: string): string {

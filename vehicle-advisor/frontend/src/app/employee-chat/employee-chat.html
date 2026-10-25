@@ -101,6 +101,36 @@
       }
     </div>
 
+    @if (cars().length) {
+      <!-- השוואה לרכב — ישירות, בלי לחכות לבוט -->
+      <div class="demos" role="group" aria-labelledby="car-label">
+        <label id="car-label" class="demos-label" for="car-select">השוואה לרכב:</label>
+        <select
+          id="car-select"
+          class="field sm"
+          [value]="selectedCar()"
+          (change)="selectedCar.set($any($event.target).value)"
+        >
+          @for (car of cars(); track car.id) {
+            <option [value]="car.id">
+              {{ car.label }}{{ car.company_cost ? ' · עלות לחברה ' + (car.company_cost | number: '1.0-0') + ' ₪' : '' }}
+            </option>
+          }
+        </select>
+        <button
+          class="btn primary sm"
+          type="button"
+          [disabled]="busy() || comparing() || !selectedCar()"
+          (click)="compareCar()"
+        >
+          השווי
+        </button>
+        @if (compareNote()) {
+          <span class="demos-label" role="status">{{ compareNote() }}</span>
+        }
+      </div>
+    }
+
     @if (demos().length) {
       <div class="demos" role="group" aria-labelledby="demos-label">
         <span id="demos-label" class="demos-label">אפשר לנסות עם עובדת לדוגמה:</span>
@@ -298,6 +328,11 @@
         </div>
         @if (c.reason) {
           <p class="reason">זכאות: {{ c.reason }}</p>
+        }
+        @if (c.participation_source === 'catalogue_default') {
+          <p class="reason">
+            ההשתתפות לפי ברירת המחדל בקטלוג. ההשתתפות בפועל עשויה להיות שונה, ואפשר לבדוק אותה בשיחה.
+          </p>
         }
       </div>
 
