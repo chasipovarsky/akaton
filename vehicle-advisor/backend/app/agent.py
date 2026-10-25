@@ -1,4 +1,6 @@
+import logging
 import os
+import re
 import time
 
 import httpx
@@ -10,6 +12,8 @@ from app import store
 from app.config import load_catalogue, load_rules
 from app.comparison import run_comparison, today_snapshot
 from app.timing import timed
+
+log = logging.getLogger("vehicle_advisor")
 
 load_dotenv()
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -145,38 +149,94 @@ class TurnTimeout(Exception):
     """התור לא הסתיים בזמן (תקרת זמן או מספר סבבי כלים) — מחזירים הודעה ידידותית."""
 
 
-CALL_TIMEOUT_S = 30   # תקרה לקריאה אחת ל-Gemini
+# הערה על יחידות: HttpOptions.timeout ב-google-genai הוא באלפיות שנייה. הספרייה ממירה אותו
+# לשניות עבור httpx, ושולחת גם כותרת X-Server-Timeout (בשניות) — שרת Gemini עוצר את הקריאה
+# בעצמו אחרי הזמן הזה ומחזיר 504 DEADLINE_EXCEEDED.
+CALL_TIMEOUT_S = 60   # תקרה לקריאה אחת ל-Gemini (נשלח כ-60000 ms)
 TURN_TIMEOUT_S = 90   # תקרה לתור שלם
 MAX_TOOL_ROUNDS = 6   # סבבי כלים בתור אחד
-_FALLBACK_CODES = (404, 429, 503)  # מודל חסר / מכסה / עומס — רק אז עוברים למודל הגיבוי
+# מודל חסר / מכסה / עומס / חריגת זמן בצד השרת — רק אז עוברים למודל הגיבוי
+_FALLBACK_CODES = (404, 429, 503, 504)
 
 
-def _is_fallback_error(e: Exception) -> bool:
+def _timeout_ms(seconds: float) -> int:
+    return int(seconds * 1000)
+
+
+# ── "חשיבה" מינימלית: הבוט מפעיל כלים ומעביר מספרים מהם — אין צורך בחשיבה ארוכה ──
+# לפי google-genai 2.31: thinking_budget נתמך רק במודלי 2.5 (0 = כבוי);
+# ממודלי 3.x משתמשים ב-thinking_level (ו-thinking_budget שם מחזיר שגיאה).
+_THINKING_REJECTED: set[str] = set()  # מודלים שדחו את ההגדרה — לא נשלח להם שוב
+
+
+def _thinking_config(model: str) -> types.ThinkingConfig | None:
+    name = model.lower().removeprefix("models/")
+    if name.startswith("gemini-2.5"):
+        if "pro" in name:
+            # ב-2.5 Pro אי אפשר לכבות חשיבה — התקציב המינימלי
+            return types.ThinkingConfig(thinking_budget=128)
+        return types.ThinkingConfig(thinking_budget=0)  # flash / flash-lite: בלי חשיבה
+    if re.match(r"gemini-[3-9]", name):
+        # LOW נתמך גם ב-Flash וגם ב-Pro של דור 3 (MINIMAL — רק בחלק מהמודלים)
+        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+    return None  # מודל ישן / לא מוכר — לא שולחים הגדרה שאולי לא נתמכת
+
+
+def _is_thinking_rejected(e: Exception) -> bool:
+    """400 מהשרת שמתלונן על הגדרת החשיבה — נוותר עליה במקום להפיל את הקריאה."""
+    return getattr(e, "code", None) == 400 and "thinking" in str(e).lower()
+
+
+def _error_code(e: Exception) -> int | None:
     code = getattr(e, "code", None)
     if code in _FALLBACK_CODES:
-        return True
-    return any(str(c) in str(e) for c in _FALLBACK_CODES)
+        return code
+    return next((c for c in _FALLBACK_CODES if str(c) in str(e)), None)
+
+
+def _call_config(config, model: str, deadline: float | None) -> types.GenerateContentConfig:
+    """הגדרות לקריאה אחת: timeout (מוגבל בזמן שנשאר לתור) + חשיבה מינימלית לפי המודל."""
+    remaining = CALL_TIMEOUT_S if deadline is None else min(CALL_TIMEOUT_S, deadline - time.monotonic())
+    if remaining <= 1:
+        raise TurnTimeout()
+    update = {"http_options": types.HttpOptions(timeout=_timeout_ms(remaining))}
+    thinking = None if model in _THINKING_REJECTED else _thinking_config(model)
+    if thinking is not None:
+        update["thinking_config"] = thinking
+    return config.model_copy(update=update)
 
 
 def _generate(contents, config, deadline: float | None = None):
-    """מנסה את המודלים לפי הסדר; עובר למודל הבא רק בשגיאת מודל חסר, מכסה או עומס.
-    בלי retries ובלי המתנות: כל ניסוי מוגבל ב-30 שניות או בזמן שנשאר לתור."""
+    """מנסה את המודלים לפי הסדר; עובר למודל הבא רק בשגיאת מודל חסר, מכסה, עומס או 504.
+    בלי retries ובלי המתנות: כל ניסוי מוגבל ב-60 שניות או בזמן שנשאר לתור."""
     last = None
     for m in MODELS:
-        remaining = CALL_TIMEOUT_S if deadline is None else min(CALL_TIMEOUT_S, deadline - time.monotonic())
-        if remaining <= 1:
-            raise TurnTimeout()
-        cfg = config.model_copy(update={"http_options": types.HttpOptions(timeout=int(remaining * 1000))})
         try:
-            with timed(f"gemini {m}"):
-                return _client.models.generate_content(model=m, contents=contents, config=cfg)
+            try:
+                with timed(f"gemini {m}"):
+                    return _client.models.generate_content(
+                        model=m, contents=contents, config=_call_config(config, m, deadline))
+            except Exception as e:
+                if not _is_thinking_rejected(e) or m in _THINKING_REJECTED:
+                    raise
+                # המודל לא תומך בהגדרת החשיבה — שולחים שוב פעם אחת בלעדיה, וזוכרים
+                log.warning("model %s rejected thinking_config; retrying without it", m)
+                _THINKING_REJECTED.add(m)
+                with timed(f"gemini {m} (no thinking_config)"):
+                    return _client.models.generate_content(
+                        model=m, contents=contents, config=_call_config(config, m, deadline))
         except (httpx.TimeoutException, TimeoutError) as e:
             raise TurnTimeout() from e  # לא מנסים מודל אחר על timeout — זה רק יאריך
+        except TurnTimeout:
+            raise
         except Exception as e:
-            if _is_fallback_error(e):
+            if _error_code(e) is not None:
                 last = e
                 continue
             raise
+    # כל המודלים נכשלו. אם האחרון חרג מהזמן בצד השרת (504) — זה timeout: הודעה ידידותית
+    if _error_code(last) == 504:
+        raise TurnTimeout() from last
     raise last
 
 
@@ -191,7 +251,7 @@ def _chat(sid: str, message: str) -> str:
         _client = genai.Client(
             api_key=os.environ["GEMINI_API_KEY"],
             # timeout ברירת מחדל לכל בקשה; retry_options=None — בלי ניסיונות חוזרים של הספרייה
-            http_options=types.HttpOptions(timeout=CALL_TIMEOUT_S * 1000, retry_options=None),
+            http_options=types.HttpOptions(timeout=_timeout_ms(CALL_TIMEOUT_S), retry_options=None),
         )
     deadline = time.monotonic() + TURN_TIMEOUT_S
 
