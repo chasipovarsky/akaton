@@ -57,15 +57,20 @@ export interface QuestionStatus {
   answers_ready?: number;
 }
 
-export interface ChatReply extends QuestionStatus {
-  reply: string;
-  comparison?: Comparison | PendingComparison | null;
-  error?: string;
-}
-
 export interface ChatState extends QuestionStatus {
   history: ChatMsg[];
   comparison: Comparison | PendingComparison | null;
+  // תור של הבוט רץ ברקע; error_message — רק אם התור נכשל
+  busy?: boolean;
+  error_message?: string | null;
+  pending_message?: string;
+}
+
+// POST /api/chat ו-/api/chat/resume חוזרים מיד; התשובה מגיעה דרך /state
+export interface TurnStarted extends QuestionStatus {
+  status?: 'pending';
+  resumed?: boolean;
+  comparison?: Comparison | PendingComparison | null;
 }
 
 export interface RankOption {
@@ -105,13 +110,13 @@ export interface AgentQuestion {
 export class Api {
   private http = inject(HttpClient);
 
-  chat(sessionId: string, message: string): Observable<ChatReply> {
-    return this.http.post<ChatReply>(`${BASE}/chat`, { session_id: sessionId, message });
+  chat(sessionId: string, message: string): Observable<TurnStarted> {
+    return this.http.post<TurnStarted>(`${BASE}/chat`, { session_id: sessionId, message });
   }
 
   // ממשיך את השיחה לבד אם הגיעה תשובת נציג (בלי לקרוא למודל אם אין)
-  resume(sessionId: string): Observable<ChatReply & { resumed: boolean }> {
-    return this.http.post<ChatReply & { resumed: boolean }>(`${BASE}/chat/resume`, {
+  resume(sessionId: string): Observable<TurnStarted> {
+    return this.http.post<TurnStarted>(`${BASE}/chat/resume`, {
       session_id: sessionId,
     });
   }

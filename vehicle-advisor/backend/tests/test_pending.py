@@ -13,6 +13,7 @@ import app.agent as agent
 from app import store
 from app.comparison import run_comparison, today_snapshot
 from app.main import app
+from conftest import wait_turn
 
 client = TestClient(app)
 
@@ -41,7 +42,7 @@ def fake_model(monkeypatch):
     queue = []
     seen = []
 
-    def fake_generate(contents, config):
+    def fake_generate(contents, config, deadline=None):
         seen.append(contents[-1])
         return queue.pop(0)
 
@@ -78,7 +79,8 @@ def test_missing_participation_shows_today_only(fake_model):
         _text("חסר לי סכום ההשתתפות, שאלתי את הנציג."),
     ]
     r = client.post("/api/chat", json={"session_id": sid, "message": "אני רוצה ATTO 3"})
-    body = r.json()
+    assert r.json() == {"status": "pending"}
+    body = wait_turn(client, sid)
     c = body["comparison"]
     assert c["status"] == "pending"
     assert c["today"]["net"] == run_comparison(E001, "CAR-10", 300)["today"]["net"]
@@ -97,7 +99,8 @@ def test_compare_without_ask_agent_does_not_show_pending(fake_model):
         _call("compare_alternative", target="CAR-10"),
         _text("מה ההשתתפות שלך ברכב החדש?"),
     ]
-    body = client.post("/api/chat", json={"session_id": sid, "message": "ATTO 3"}).json()
+    client.post("/api/chat", json={"session_id": sid, "message": "ATTO 3"})
+    body = wait_turn(client, sid)
     assert body["comparison"] is None
     assert body["open_questions"] == 0
 
@@ -111,6 +114,7 @@ def _ask_rep(fake_model, sid):
         _text("חסר לי סכום ההשתתפות, שאלתי את הנציג."),
     ]
     client.post("/api/chat", json={"session_id": sid, "message": "אני רוצה ATTO 3"})
+    wait_turn(client, sid)
     return next(q for q in store.list_questions() if q["session_id"] == sid)["id"]
 
 
@@ -136,7 +140,8 @@ def test_comparison_appears_after_rep_answer_without_new_message(fake_model):
         _text("קיבלתי תשובה מהנציג. הנה ההשוואה."),
     ]
     r = client.post("/api/chat/resume", json={"session_id": sid}).json()
-    assert r["resumed"] is True
+    assert r == {"status": "pending", "resumed": True}
+    r = wait_turn(client, sid)
     ref = run_comparison(E001, "CAR-10", 350)
     assert r["comparison"]["status"] == "ok"
     assert r["comparison"]["alt"]["net"] == ref["alt"]["net"]
@@ -157,14 +162,14 @@ def test_rep_answer_not_lost_when_model_fails(fake_model, monkeypatch):
     qid = _ask_rep(fake_model, sid)
     store.answer_question(qid, "350")
 
-    def boom(contents, config):
+    def boom(contents, config, deadline=None):
         raise RuntimeError("model down")
 
     monkeypatch.setattr(agent, "_generate", boom)
-    r = client.post("/api/chat/resume", json={"session_id": sid}).json()
-    assert "error" not in r
+    client.post("/api/chat/resume", json={"session_id": sid})
+    st = wait_turn(client, sid)
+    assert "model down" not in str(st) and st["error_message"]
     # התשובה חזרה למצב "מחכה" — הבדיקה הבאה תנסה שוב
-    st = client.get(f"/api/chat/{sid}/state").json()
     assert st["answers_ready"] == 1
 
 

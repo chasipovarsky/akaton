@@ -1,4 +1,7 @@
 import os
+import time
+
+import httpx
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -6,6 +9,7 @@ from google.genai import types
 from app import store
 from app.config import load_catalogue, load_rules
 from app.comparison import run_comparison, today_snapshot
+from app.timing import timed
 
 load_dotenv()
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -137,14 +141,39 @@ def _run_tool(sid: str, profile: dict, name: str, args: dict) -> dict:
     return {"error": f"כלי לא מוכר: {name}"}
 
 
-def _generate(contents, config):
-    """מנסה את המודלים לפי הסדר; עובר למודל הבא בשגיאת מודל חסר, מכסה או עומס."""
+class TurnTimeout(Exception):
+    """התור לא הסתיים בזמן (תקרת זמן או מספר סבבי כלים) — מחזירים הודעה ידידותית."""
+
+
+CALL_TIMEOUT_S = 30   # תקרה לקריאה אחת ל-Gemini
+TURN_TIMEOUT_S = 90   # תקרה לתור שלם
+MAX_TOOL_ROUNDS = 6   # סבבי כלים בתור אחד
+_FALLBACK_CODES = (404, 429, 503)  # מודל חסר / מכסה / עומס — רק אז עוברים למודל הגיבוי
+
+
+def _is_fallback_error(e: Exception) -> bool:
+    code = getattr(e, "code", None)
+    if code in _FALLBACK_CODES:
+        return True
+    return any(str(c) in str(e) for c in _FALLBACK_CODES)
+
+
+def _generate(contents, config, deadline: float | None = None):
+    """מנסה את המודלים לפי הסדר; עובר למודל הבא רק בשגיאת מודל חסר, מכסה או עומס.
+    בלי retries ובלי המתנות: כל ניסוי מוגבל ב-30 שניות או בזמן שנשאר לתור."""
     last = None
     for m in MODELS:
+        remaining = CALL_TIMEOUT_S if deadline is None else min(CALL_TIMEOUT_S, deadline - time.monotonic())
+        if remaining <= 1:
+            raise TurnTimeout()
+        cfg = config.model_copy(update={"http_options": types.HttpOptions(timeout=int(remaining * 1000))})
         try:
-            return _client.models.generate_content(model=m, contents=contents, config=config)
+            with timed(f"gemini {m}"):
+                return _client.models.generate_content(model=m, contents=contents, config=cfg)
+        except (httpx.TimeoutException, TimeoutError) as e:
+            raise TurnTimeout() from e  # לא מנסים מודל אחר על timeout — זה רק יאריך
         except Exception as e:
-            if any(code in str(e) for code in ("404", "429", "503")):
+            if _is_fallback_error(e):
                 last = e
                 continue
             raise
@@ -152,9 +181,19 @@ def _generate(contents, config):
 
 
 def chat(sid: str, message: str) -> str:
+    with timed("bot turn total"):
+        return _chat(sid, message)
+
+
+def _chat(sid: str, message: str) -> str:
     global _client
     if _client is None:
-        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        _client = genai.Client(
+            api_key=os.environ["GEMINI_API_KEY"],
+            # timeout ברירת מחדל לכל בקשה; retry_options=None — בלי ניסיונות חוזרים של הספרייה
+            http_options=types.HttpOptions(timeout=CALL_TIMEOUT_S * 1000, retry_options=None),
+        )
+    deadline = time.monotonic() + TURN_TIMEOUT_S
 
     profile, contents = store.load_session(sid)
     base_len = len(contents)
@@ -174,8 +213,8 @@ def chat(sid: str, message: str) -> str:
     )
 
     try:
-        for _ in range(8):  # מגבלה על לולאת כלים
-            resp = _generate(contents, config)
+        for _ in range(MAX_TOOL_ROUNDS + 1):  # עד 6 סבבי כלים + תשובה סופית
+            resp = _generate(contents, config, deadline)
             contents.append(resp.candidates[0].content)
             calls = resp.function_calls or []
             if not calls:
@@ -183,12 +222,13 @@ def chat(sid: str, message: str) -> str:
                 return resp.text or ""
             parts = []
             for fc in calls:
-                result = _run_tool(sid, profile, fc.name, dict(fc.args or {}))
+                with timed(f"tool {fc.name}"):
+                    result = _run_tool(sid, profile, fc.name, dict(fc.args or {}))
                 parts.append(types.Part.from_function_response(
                     name=fc.name, response={"result": result}))
             contents.append(types.Content(role="user", parts=parts))
-        store.save_session(sid, profile, contents)
-        return "מצטער/ת, משהו השתבש. נסה/י שוב."
+        # חרגנו ממספר הסבבים — כמו timeout: לא שומרים חצי תור
+        raise TurnTimeout()
     except Exception:
         # לא שומרים היסטוריה חצי-גמורה, אבל כן את הפרופיל שנאסף
         store.save_session(sid, profile, contents[:base_len])

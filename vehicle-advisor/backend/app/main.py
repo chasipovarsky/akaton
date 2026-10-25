@@ -3,6 +3,7 @@ import os
 import re
 import time
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, APIRouter, Request, HTTPException
@@ -11,17 +12,38 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import store
+from app import store, turns
 from google.genai import types
 
-from app.config import load_catalogue, load_rules, load_demo_employees
+from app.config import load_catalogue, load_rules, load_demo_employees, warm_cache
 from app.comparison import run_comparison, rank_options
-from app.agent import chat as agent_chat, REQUIRED
+from app.agent import chat as agent_chat, REQUIRED, TurnTimeout
+
+TIMEOUT_MSG = "לא הצלחתי לסיים בזמן, אפשר לנסות שוב."
 
 log = logging.getLogger("vehicle_advisor")
+# לוג הזמנים (vehicle_advisor.timing) גלוי בלוג השרת
+if not logging.getLogger("vehicle_advisor").handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(levelname)s:     [%(name)s] %(message)s"))
+    logging.getLogger("vehicle_advisor").addHandler(_h)
+    logging.getLogger("vehicle_advisor").setLevel(logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # חימום: קבצי הנתונים נטענים בעליית השרת, לא בבקשה הראשונה
+    try:
+        warm_cache()
+    except Exception:
+        log.exception("warm cache failed")  # לא מפילים את השרת; ייטען בבקשה הראשונה
+    yield
+    turns.shutdown()
+
 
 # ── אפליקציה ────────────────────────────────────────────────────────────────
-app = FastAPI(title="Vehicle Advisor", docs_url="/api/docs", openapi_url="/api/openapi.json")
+app = FastAPI(title="Vehicle Advisor", docs_url="/api/docs", openapi_url="/api/openapi.json",
+              lifespan=lifespan)
 
 _origins = ["http://localhost:4200"]
 _extra = os.getenv("CORS_ORIGINS", "")
@@ -148,13 +170,15 @@ def chat_endpoint(req: ChatRequest, request: Request):
             content={"reply": f"ההודעה ארוכה מדי (מקסימום {_MAX_MSG_LEN} תווים).",
                      "error": "message_too_long"},
         )
-    return _run_agent(req.session_id, req.message)
+    if not _start_turn(req.session_id, req.message):
+        return _busy()
+    return {"status": "pending"}
 
 
 @api.post("/chat/resume")
 def chat_resume(req: RankRequest, request: Request):
     """ממשיך את השיחה לבד כשהגיעה תשובת נציג — בלי הודעה מהעובדת.
-    אם אין תשובה שמחכה, לא קוראים למודל בכלל."""
+    אם אין תשובה שמחכה, לא קוראים למודל בכלל. אחרת — אותו עיקרון: ריצה ברקע."""
     _require_sid(req.session_id)
     status = store.question_status(req.session_id)
     if not status["answers_ready"]:
@@ -163,31 +187,39 @@ def chat_resume(req: RankRequest, request: Request):
     if not _check_rate(_client_ip(request)):
         return _rate_limited()
     # agent.chat מצרף את תשובות הנציג לפני ההודעה; ההודעה עצמה ריקה
-    res = _run_agent(req.session_id, "")
-    if isinstance(res, JSONResponse):  # מכסה וכו'
-        return res
-    return {"resumed": True, **res}
+    if not _start_turn(req.session_id, ""):
+        return _busy()
+    return {"status": "pending", "resumed": True}
 
 
-def _run_agent(sid: str, message: str):
-    try:
-        reply = agent_chat(sid, message)
-        profile, _ = store.load_session(sid)
-        return {"reply": reply, "comparison": profile.get("_last_comparison"),
-                **store.question_status(sid)}
-    except Exception as e:
-        # שגיאת מכסה מכל המודלים
+QUOTA_MSG = "מכסת ה-AI להיום אזלה. המערכת תחזור לפעול מחר — אפשר לנסות שוב אז."
+GENERIC_ERROR_MSG = "אירעה תקלה זמנית. אפשר לנסות שוב בעוד רגע."
+
+
+def _busy() -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"reply": "אני עדיין עונה על ההודעה הקודמת. רגע אחד ואפשר להמשיך.",
+                 "error": "busy"},
+    )
+
+
+def _turn_error(sid: str):
+    def to_message(e: Exception) -> str:
+        """חריגה בתור → הודעה ידידותית בעברית. הפרטים בלוג השרת בלבד."""
+        if isinstance(e, TurnTimeout):
+            log.warning("chat turn timed out (sid=%s)", sid[:8])
+            return TIMEOUT_MSG
         if "429" in str(e) or "quota" in str(e).lower() or "Resource has been exhausted" in str(e):
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "reply": "מכסת ה-AI להיום אזלה. המערכת תחזור לפעול מחר — אפשר לנסות שוב אז.",
-                    "error": "quota_exhausted",
-                },
-            )
-        # הפרטים נרשמים בלוג השרת בלבד — לא חוזרים למשתמש
-        log.exception("chat failed")
-        return {"reply": "אירעה תקלה זמנית. אפשר לנסות שוב בעוד רגע."}
+            log.warning("chat quota exhausted (sid=%s)", sid[:8])
+            return QUOTA_MSG
+        log.exception("chat failed (sid=%s)", sid[:8])
+        return GENERIC_ERROR_MSG
+    return to_message
+
+
+def _start_turn(sid: str, message: str) -> bool:
+    return turns.start(sid, message, lambda: agent_chat(sid, message), _turn_error(sid))
 
 
 @api.post("/rank")
@@ -237,6 +269,9 @@ def demo_load(emp_id: str, req: DemoRequest):
     emp = next((e for e in load_demo_employees() if e["id"] == emp_id), None)
     if emp is None:
         raise HTTPException(status_code=404, detail="עובדת לדוגמה לא נמצאה")
+    if turns.is_busy(req.session_id):
+        # תור שרץ עכשיו ישמור בסופו את הפרופיל הישן — לא מחליפים באמצע
+        return _busy()
     _, history = store.load_session(req.session_id)
     # פרופיל חדש לגמרי (בלי השוואה קודמת), וההיסטוריה ממשיכה
     history += [
@@ -254,11 +289,19 @@ def demo_load(emp_id: str, req: DemoRequest):
 @api.get("/chat/{session_id}/state")
 def chat_state(session_id: str):
     _require_sid(session_id)
+    # קודם מצב התור, ורק אחר כך הנתונים: אם התור כבר הסתיים, מה שנקרא אחריו סופי.
+    # (בסדר ההפוך תור שמסתיים באמצע יחזיר busy=false עם פרופיל ישן)
+    turn = turns.status(session_id)
     profile, _ = store.load_session(session_id)
+    history = store.display_history(session_id)
+    # ההודעה שבטיפול עוד לא נשמרה בהיסטוריה — מציגים אותה כדי שתשרוד רענון
+    if turn["busy"] and turn["pending_message"]:
+        history.append({"role": "user", "text": turn["pending_message"]})
     return {
-        "history": store.display_history(session_id),
+        "history": history,
         "comparison": profile.get("_last_comparison"),
         **store.question_status(session_id),
+        **turn,
     }
 
 

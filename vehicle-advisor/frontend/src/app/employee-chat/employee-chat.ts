@@ -3,10 +3,13 @@ import {
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import {
-  Api, ChatMsg, Comparison, DemoEmployee, PendingComparison, QuestionStatus, RankResult,
+  Api, ChatMsg, ChatState, Comparison, DemoEmployee, PendingComparison, QuestionStatus, RankResult,
 } from '../api.service';
 
-const POLL_MS = 5000;
+const POLL_MS = 5000;            // בדיקת תשובת נציג
+const TURN_POLL_MS = 2000;       // בדיקת תור של הבוט שרץ ברקע
+const TURN_MAX_WAIT_MS = 180000; // 3 דקות — אחרי זה "זה לוקח יותר מהרגיל"
+const SLOW_MSG = 'זה לוקח יותר מהרגיל. אפשר לנסות שוב.';
 
 @Component({
   selector: 'app-employee-chat',
@@ -18,6 +21,10 @@ export class EmployeeChat implements OnInit, OnDestroy {
   private api = inject(Api);
   // בדיקה כל 5 שניות אם הנציגה ענתה — רק כשיש שאלה פתוחה
   private poll?: ReturnType<typeof setInterval>;
+  // תור של הבוט ברקע: בדיקה כל 2 שניות כל עוד busy
+  private turnPoll?: ReturnType<typeof setInterval>;
+  private turnStarted = 0;
+  private turnSent = '';
 
   readonly suggestions = [
     'אני רוצה לעבור לרכב חשמלי',
@@ -51,11 +58,16 @@ export class EmployeeChat implements OnInit, OnDestroy {
   ngOnInit() {
     this.api.state(this.sessionId()).subscribe({
       next: (s) => {
-        this.messages.set(s.history);
-        this.comparison.set(s.comparison);
         this.loading.set(false);
-        this.scroll();
-        this.syncPolling(s);
+        if (s.busy) {
+          // רענון באמצע תור: ההיסטוריה כבר כוללת את ההודעה שבטיפול — ממשיכים לחכות
+          this.messages.set(s.history);
+          this.comparison.set(s.comparison);
+          this.scroll();
+          this.startTurnPolling(s.pending_message ?? '');
+        } else {
+          this.applyState(s);
+        }
       },
       error: () => this.loading.set(false),
     });
@@ -63,7 +75,55 @@ export class EmployeeChat implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.stopTurnPolling();
     this.stopPolling();
+  }
+
+  // ── תור של הבוט ברקע ───────────────────────────────────────────────────────
+  private startTurnPolling(sent: string) {
+    this.stopPolling(); // בזמן תור לא בודקים תשובת נציג — התור עצמו יחזיר את המצב
+    this.stopTurnPolling();
+    this.busy.set(true);
+    this.turnSent = sent;
+    this.turnStarted = Date.now();
+    const sid = this.sessionId();
+    this.turnPoll = setInterval(() => this.checkTurn(sid), TURN_POLL_MS);
+  }
+
+  private stopTurnPolling() {
+    clearInterval(this.turnPoll);
+    this.turnPoll = undefined;
+  }
+
+  private checkTurn(sid: string) {
+    if (sid !== this.sessionId()) return this.stopTurnPolling(); // עברנו לשיחה חדשה
+    if (Date.now() - this.turnStarted > TURN_MAX_WAIT_MS) {
+      this.stopTurnPolling();
+      this.busy.set(false);
+      this.failed.set({ text: SLOW_MSG, sent: this.turnSent });
+      this.scroll();
+      return;
+    }
+    this.api.state(sid).subscribe({
+      next: (s) => {
+        if (s.busy || sid !== this.sessionId() || !this.turnPoll) return;
+        this.stopTurnPolling();
+        this.applyState(s);
+      },
+      error: () => {}, // תקלה רגעית — הבדיקה הבאה תנסה שוב
+    });
+  }
+
+  /** מצב מהשרת אחרי שהתור הסתיים (או כשאין תור): הודעות, השוואה, שגיאה, ובדיקת נציג. */
+  private applyState(s: ChatState) {
+    this.messages.set(s.history);
+    this.comparison.set(s.comparison);
+    this.busy.set(false);
+    this.failed.set(
+      s.error_message ? { text: s.error_message, sent: s.pending_message || this.turnSent } : null,
+    );
+    this.scroll();
+    this.syncPolling(s);
   }
 
   // ── תשובת נציג: בדיקה אוטומטית והמשך שיחה ────────────────────────────────
@@ -96,20 +156,17 @@ export class EmployeeChat implements OnInit, OnDestroy {
     this.busy.set(true);
     const sid = this.sessionId();
     this.api.resume(sid).subscribe({
-      next: () => {
-        // ההיסטוריה מהשרת כוללת גם את "תשובת הנציג" וגם את תשובת הבוט
-        this.api.state(sid).subscribe({
-          next: (s) => {
-            this.messages.set(s.history);
-            this.comparison.set(s.comparison);
-            this.busy.set(false);
-            this.scroll();
-            this.syncPolling(s);
-          },
-          error: () => this.busy.set(false),
-        });
+      next: (r) => {
+        if (r.status === 'pending') {
+          // התור רץ ברקע; ההיסטוריה שתגיע תכלול את "תשובת הנציג" ואת תשובת הבוט
+          this.startTurnPolling('');
+        } else {
+          this.busy.set(false);
+          this.syncPolling(r);
+        }
       },
       error: (e) => {
+        if (e?.status === 409) return this.startTurnPolling(''); // תור כבר רץ — מחכים לו
         const msg = e?.error?.reply ?? 'הנציגה ענתה, אבל לא הצלחתי להמשיך את השיחה. אפשר לכתוב לי הודעה.';
         this.failed.set({ text: msg, sent: '' });
         this.busy.set(false);
@@ -130,8 +187,9 @@ export class EmployeeChat implements OnInit, OnDestroy {
         this.busy.set(false);
         this.scroll();
       },
-      error: () => {
-        this.failed.set({ text: 'לא הצלחתי לטעון את העובדת לדוגמה. אפשר לנסות שוב.', sent: '' });
+      error: (e) => {
+        const msg = e?.status === 409 ? e.error.reply : 'לא הצלחתי לטעון את העובדת לדוגמה. אפשר לנסות שוב.';
+        this.failed.set({ text: msg, sent: '' });
         this.busy.set(false);
       },
     });
@@ -146,16 +204,11 @@ export class EmployeeChat implements OnInit, OnDestroy {
     this.busy.set(true);
     this.scroll();
 
+    // השרת חוזר מיד עם pending; התשובה מגיעה דרך /state (בדיקה כל 2 שניות)
     this.api.chat(this.sessionId(), text).subscribe({
-      next: (r) => {
-        this.messages.update((m) => [...m, { role: 'bot', text: r.reply }]);
-        if (r.comparison) this.comparison.set(r.comparison);
-        this.busy.set(false);
-        this.scroll();
-        this.syncPolling(r);
-      },
+      next: () => this.startTurnPolling(text),
       error: (e) => {
-        // מגבלת קצב / מכסה / הודעה ארוכה — השרת מחזיר reply ידידותי
+        // מגבלת קצב / הודעה ארוכה / תור שכבר רץ (409) — השרת מחזיר reply ידידותי
         const msg = e?.error?.reply ?? 'לא הצלחתי להתחבר לשרת. בדקי שהשרת רץ ונסי שוב.';
         this.failed.set({ text: msg, sent: text });
         this.busy.set(false);
@@ -201,7 +254,9 @@ export class EmployeeChat implements OnInit, OnDestroy {
   }
 
   newChat() {
+    this.stopTurnPolling();
     this.stopPolling();
+    this.busy.set(false);
     const sid = crypto.randomUUID();
     localStorage.setItem('sid', sid);
     this.sessionId.set(sid);

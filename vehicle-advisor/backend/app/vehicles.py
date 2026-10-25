@@ -1,5 +1,8 @@
+import threading
 from pathlib import Path
 import pandas as pd
+
+from app.timing import timed
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 _GZ_PATH  = DATA_DIR / "vehicle_value_2026.csv.gz"
@@ -23,13 +26,19 @@ COLUMN_MAP = {
 KEY = ["tax_year", "reg_year", "vehicle_type_code", "maker_code", "model_code"]
 
 _df = None
+_lock = threading.Lock()
 
 
 def load_vehicles() -> pd.DataFrame:
     global _df
-    if _df is None:
+    if _df is not None:
+        return _df
+    with _lock:  # שני תורים במקביל לא יטענו את ה-CSV פעמיים
+        if _df is not None:
+            return _df
         src = _GZ_PATH if _GZ_PATH.exists() else _CSV_PATH
-        df = pd.read_csv(src, encoding="cp1255")
+        with timed(f"read {src.name}"):
+            df = pd.read_csv(src, encoding="cp1255")
         df.columns = [c.strip() for c in df.columns]
         df = df.rename(columns=COLUMN_MAP)
         df = df[[c for c in COLUMN_MAP.values() if c in df.columns]]
@@ -42,11 +51,12 @@ def load_vehicles() -> pd.DataFrame:
 def get_value_of_use(tax_year, reg_year, vehicle_type_code, maker_code, model_code):
     """מחזיר רשימת התאמות לפי המפתח הרשמי (בדרך כלל אחת)."""
     df = load_vehicles()
-    mask = (
-        (df["tax_year"] == int(tax_year))
-        & (df["reg_year"] == int(reg_year))
-        & (df["vehicle_type_code"] == int(vehicle_type_code))
-        & (df["maker_code"] == int(maker_code))
-        & (df["model_code"] == int(model_code))
-    )
-    return df[mask].to_dict("records")
+    with timed("value-of-use lookup"):
+        mask = (
+            (df["tax_year"] == int(tax_year))
+            & (df["reg_year"] == int(reg_year))
+            & (df["vehicle_type_code"] == int(vehicle_type_code))
+            & (df["maker_code"] == int(maker_code))
+            & (df["model_code"] == int(model_code))
+        )
+        return df[mask].to_dict("records")

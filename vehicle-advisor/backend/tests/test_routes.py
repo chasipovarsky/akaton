@@ -140,7 +140,7 @@ def test_uuid_session_id_accepted():
 
 # ── שגיאות בצ'אט ────────────────────────────────────────────────────────────
 
-def test_chat_error_does_not_leak_exception(monkeypatch, caplog):
+def test_chat_error_does_not_leak_exception(monkeypatch, caplog, wait):
     import uuid
     import app.main as main_mod
 
@@ -149,17 +149,17 @@ def test_chat_error_does_not_leak_exception(monkeypatch, caplog):
 
     monkeypatch.setattr(main_mod, "agent_chat", boom)
     main_mod._rate_store.clear()
-    r = client.post("/api/chat", json={"session_id": str(uuid.uuid4()), "message": "שלום"})
-    assert r.status_code == 200
-    body = r.json()
-    assert "error" not in body
-    assert "SECRET_INTERNAL_DETAIL" not in r.text
-    assert "תקלה" in body["reply"]
+    sid = str(uuid.uuid4())
+    r = client.post("/api/chat", json={"session_id": sid, "message": "שלום"})
+    assert r.status_code == 200 and r.json() == {"status": "pending"}
+    st = wait(client, sid)
+    assert "SECRET_INTERNAL_DETAIL" not in str(st)
+    assert "תקלה" in st["error_message"]
     # הפרטים נרשמו בלוג השרת
     assert "SECRET_INTERNAL_DETAIL" in caplog.text
 
 
-def test_chat_quota_error_keeps_friendly_message(monkeypatch):
+def test_chat_quota_error_keeps_friendly_message(monkeypatch, wait):
     import uuid
     import app.main as main_mod
 
@@ -168,10 +168,11 @@ def test_chat_quota_error_keeps_friendly_message(monkeypatch):
 
     monkeypatch.setattr(main_mod, "agent_chat", quota)
     main_mod._rate_store.clear()
-    r = client.post("/api/chat", json={"session_id": str(uuid.uuid4()), "message": "שלום"})
-    assert r.status_code == 503
-    assert r.json()["error"] == "quota_exhausted"
-    assert "מכסת" in r.json()["reply"]
+    sid = str(uuid.uuid4())
+    client.post("/api/chat", json={"session_id": sid, "message": "שלום"})
+    st = wait(client, sid)
+    assert "מכסת" in st["error_message"]
+    assert "429" not in st["error_message"]
 
 
 # ── זיהוי כתובת והגבלת קצב ──────────────────────────────────────────────────
