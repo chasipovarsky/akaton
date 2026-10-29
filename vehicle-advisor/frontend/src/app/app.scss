@@ -2,31 +2,50 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--s-2);
-  padding-block: var(--s-3);
+  gap: var(--s-2) var(--s-3);
+  padding-block: var(--s-2);
   padding-inline: var(--s-5);
   background: var(--c-primary);
-  color: #fff;
+  color: var(--c-on-primary);
+  box-shadow: var(--shadow-md);
 
   .brand {
     display: inline-flex;
     align-items: center;
-    gap: var(--s-2);
+    gap: var(--s-3);
     font-weight: 700;
-    font-size: 1.05rem;
+    font-size: var(--fs-lg);
     margin-inline-end: auto;
+    min-inline-size: 0;
   }
-  .logo { block-size: 32px; inline-size: auto; object-fit: contain; }
+  /* הלוגו האדום על רקע לבן — קריא על הסגול */
+  .logo {
+    block-size: 40px;
+    inline-size: auto;
+    object-fit: contain;
+    padding: 3px var(--s-2);
+    border-radius: var(--r-md);
+    background: var(--c-surface);
+  }
   a {
-    color: #e4def9;
-    text-decoration: none;
-    padding-block: 6px;
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--hit);
     padding-inline: var(--s-3);
-    border-radius: var(--r-sm);
-    transition: background-color var(--t-fast);
-    &:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-    &.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
-    &:focus-visible { outline-color: #fff; }
+    border-radius: var(--r-md);
+    color: var(--c-on-primary-muted);
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color var(--t-fast), color var(--t-fast);
+    &:hover { background: rgba(255, 255, 255, 0.1); color: var(--c-on-primary); }
+    &.active { background: rgba(255, 255, 255, 0.18); color: var(--c-on-primary); }
+    &:focus-visible { outline-color: var(--c-on-primary); }
+  }
+
+  @media (max-width: 480px) {
+    padding-inline: var(--s-3);
+    .brand { font-size: var(--fs-md); gap: var(--s-2); }
+    .logo { block-size: 34px; }
   }
 }
 
@@ -35,4 +54,9 @@ main {
   padding-inline: var(--s-5);
   max-inline-size: 1200px;
   margin-inline: auto;
+
+  @media (max-width: 480px) {
+    padding-block: var(--s-3);
+    padding-inline: var(--s-3);
+  }
 }

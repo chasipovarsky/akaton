@@ -1,26 +1,49 @@
-/* ── מערכת עיצוב ─────────────────────────────────────────────────────────── */
+@use 'sass:string';
+
+/* ══ מערכת עיצוב ═════════════════════════════════════════════════════════
+   צבע ראשי: הסגול הכהה של הכותרת. צבע משני עדין אחד: טורקיז כהה מגווני הלוגו של שטראוס.
+   כל הצבעים, הרווחים, הרדיוסים, הצללים וגדלי הגופן מוגדרים כאן בלבד. */
 :root {
-  /* צבעים */
+  /* צבע ראשי */
   --c-primary: #3b2a7a;
   --c-primary-hover: #2e2062;
   --c-primary-soft: #ece8fb;
   --c-primary-line: #c9c0ec;
+  --c-on-primary: #ffffff;
+  --c-on-primary-muted: #e4def9;   /* קישורים בכותרת — ניגודיות ≈9:1 על הסגול */
+
+  /* צבע משני (עדין) */
+  --c-accent: #0b6670;             /* ≈6:1 על לבן */
+  --c-accent-soft: #e3f3f4;
+
+  /* משטחים וטקסט */
   --c-bg: #f4f2fb;
   --c-surface: #ffffff;
   --c-surface-alt: #f8f7fd;
   --c-text: #231f35;
-  --c-muted: #5f5878;          /* ניגודיות ≈6.6:1 על לבן */
+  --c-muted: #5f5878;              /* ≈6.6:1 על לבן, ≈5.6:1 על primary-soft */
   --c-line: #e6e2f3;
+
+  /* מצבים */
   --c-pos: #146c3c;
   --c-pos-bg: #e3f3e9;
   --c-neg: #a8281c;
   --c-neg-bg: #fbe9e7;
+  --c-neg-line: #f2c9c4;
   --c-warn-bg: #fff6e0;
   --c-warn-line: #f0d48a;
   --c-warn-text: #664d03;
   --c-skeleton: #e9e6f4;
   --c-skeleton-shine: #f5f3fb;
   --c-focus: #6c4fe0;
+
+  /* גדלי גופן */
+  --fs-xs: 0.78rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-hero: clamp(2rem, 7vw, 2.75rem);
 
   /* רדיוסים */
   --r-sm: 8px;
@@ -31,6 +54,7 @@
   /* צללים */
   --shadow-sm: 0 1px 2px rgba(35, 31, 53, 0.06);
   --shadow-md: 0 2px 10px rgba(59, 42, 122, 0.08);
+  --shadow-lg: 0 6px 24px rgba(59, 42, 122, 0.12);
 
   /* מרווחים */
   --s-1: 4px;
@@ -40,7 +64,10 @@
   --s-5: 24px;
   --s-6: 32px;
 
-  /* תנועה */
+  /* מטרת לחיצה מינימלית */
+  --hit: 40px;
+
+  /* תנועה — מעברים עדינים בלבד */
   --t-fast: 150ms;
   --t-base: 200ms;
 
@@ -49,10 +76,12 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+html { -webkit-text-size-adjust: 100%; }
+
 body {
   margin: 0;
   font-family: var(--font);
-  font-size: 16px;
+  font-size: var(--fs-md);
   line-height: 1.5;
   background: var(--c-bg);
   color: var(--c-text);
@@ -60,11 +89,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button, input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
-/* focus ring גלוי — רק בניווט מקלדת */
+/* focus ring גלוי — רק בניווט מקלדת, על כל רכיב אינטראקטיבי */
 :focus-visible {
   outline: 3px solid var(--c-focus);
   outline-offset: 2px;
@@ -86,71 +115,77 @@ button:disabled { cursor: not-allowed; }
   border: 0;
 }
 
-/* ── רכיבים משותפים ─────────────────────────────────────────────────────── */
+.muted { color: var(--c-muted); font-size: var(--fs-sm); }
+
+/* ══ רכיבים משותפים ═════════════════════════════════════════════════════ */
+
+/* כפתורים — גובה מינימלי 40px גם בגרסה הקטנה */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
-  min-block-size: 40px;
+  min-block-size: var(--hit);
   padding-inline: var(--s-4);
   border: 1px solid transparent;
   border-radius: var(--r-md);
   font-weight: 600;
-  transition: background-color var(--t-fast), border-color var(--t-fast), opacity var(--t-fast);
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color var(--t-fast), border-color var(--t-fast), color var(--t-fast),
+    opacity var(--t-fast);
 
   &.primary {
     background: var(--c-primary);
-    color: #fff;
+    color: var(--c-on-primary);
     &:hover:not(:disabled) { background: var(--c-primary-hover); }
-    &:disabled { opacity: 0.45; }
   }
   &.ghost {
-    background: transparent;
+    background: var(--c-surface);
     border-color: var(--c-primary-line);
     color: var(--c-primary);
-    &:hover { background: var(--c-primary-soft); }
+    &:hover:not(:disabled) { background: var(--c-primary-soft); border-color: var(--c-primary); }
   }
-  &.sm { min-block-size: 32px; padding-inline: var(--s-3); font-size: 0.875rem; }
+  /* מושבת: ברור, אבל עדיין קריא */
+  &:disabled {
+    background: var(--c-skeleton);
+    border-color: transparent;
+    color: var(--c-muted);
+  }
+  &.sm { padding-inline: var(--s-3); font-size: var(--fs-sm); }
 }
 
 /* כפתור עם אייקון בלבד — חייב aria-label */
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  inline-size: 32px;
-  block-size: 32px;
+  inline-size: var(--hit);
+  block-size: var(--hit);
+  flex: none;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--c-muted);
-  transition: background-color var(--t-fast);
+  transition: background-color var(--t-fast), color var(--t-fast);
   &:hover { background: var(--c-primary-soft); color: var(--c-primary); }
 }
 
-/* כפתור הצעה (chip) */
+/* תגית-כפתור (chip) */
 .chip {
-  min-block-size: 40px;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--hit);
   padding-inline: var(--s-4);
   border: 1px solid var(--c-primary-line);
   border-radius: var(--r-pill);
   background: var(--c-surface);
   color: var(--c-primary);
   font-weight: 600;
+  line-height: 1.25;
   transition: background-color var(--t-fast), border-color var(--t-fast);
   &:hover:not(:disabled) { background: var(--c-primary-soft); border-color: var(--c-primary); }
-  &:disabled { opacity: 0.5; }
-  &.sm { min-block-size: 30px; padding-inline: var(--s-3); font-size: 0.82rem; }
-}
-
-/* שגיאה רכה עם כפתור "לנסות שוב" */
-.soft-error {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2);
-  color: var(--c-neg);
-  margin: 0;
+  &:disabled { opacity: 0.55; }
+  &.sm { padding-inline: var(--s-3); font-size: var(--fs-sm); white-space: nowrap; }
 }
 
 .panel {
@@ -168,25 +203,60 @@ button:disabled { cursor: not-allowed; }
   border: 1px solid var(--c-primary-line);
   border-radius: var(--r-md);
   background: var(--c-surface);
-  transition: border-color var(--t-fast);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  &::placeholder { color: var(--c-muted); }
   &:hover { border-color: var(--c-primary); }
-  &:focus-visible { outline-offset: 0; border-color: var(--c-primary); }
-  &.sm { inline-size: auto; max-inline-size: 100%; min-block-size: 32px; padding-block: 2px; font-size: 0.85rem; }
+  &:focus-visible {
+    outline: none;
+    border-color: var(--c-focus);
+    box-shadow: 0 0 0 3px var(--c-primary-soft), 0 0 0 5px var(--c-focus);
+  }
+  &.sm {
+    inline-size: auto;
+    max-inline-size: 100%;
+    min-block-size: var(--hit);
+    padding-block: var(--s-1);
+    font-size: var(--fs-sm);
+  }
 }
 
+/* תג הפרש: ירוק / אדום */
 .pill {
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
-  padding-block: 2px;
+  padding-block: 3px;
   padding-inline: var(--s-3);
   border-radius: var(--r-pill);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   &.pos { background: var(--c-pos-bg); color: var(--c-pos); }
   &.neg { background: var(--c-neg-bg); color: var(--c-neg); }
+  &.lg { font-size: var(--fs-md); padding-block: var(--s-1); padding-inline: var(--s-4); }
+  /* חץ כיוון (לא נקרא בקורא מסך) */
+  &.dir.pos::before { content: string.unquote("'▲' / ''"); font-size: 0.7em; }
+  &.dir.neg::before { content: string.unquote("'▼' / ''"); font-size: 0.7em; }
 }
 
+/* הודעות: שגיאה רכה / מידע — עיצוב אחיד בכל המסך */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface-alt);
+  color: var(--c-muted);
+  font-size: var(--fs-sm);
+  &.error { background: var(--c-neg-bg); border-color: var(--c-neg-line); color: var(--c-neg); }
+  &.warn { background: var(--c-warn-bg); border-color: var(--c-warn-line); color: var(--c-warn-text); }
+}
+/* skeleton — טעינה */
 .skeleton {
   display: block;
   border-radius: var(--r-sm);
@@ -199,6 +269,47 @@ button:disabled { cursor: not-allowed; }
   to   { background-position: -100% 0; }
 }
 
+/* צורות skeleton מוכנות */
+.sk-line { block-size: 12px; inline-size: 100%; margin-block: var(--s-2); &.thin { block-size: 8px; } }
+.w-40 { inline-size: 40%; }
+.w-60 { inline-size: 60%; }
+.w-num { inline-size: 64px; flex: none; }
+.sk-hero { inline-size: 55%; block-size: 40px; margin-block: var(--s-3); }
+.sk-pill { inline-size: 88px; block-size: 26px; border-radius: var(--r-pill); flex: none; }
+.sk-dot { inline-size: 18px; block-size: 18px; border-radius: 50%; flex: none; }
+.sk-row { display: flex; align-items: center; gap: var(--s-3); padding-block: var(--s-2); border-block-end: 1px solid var(--c-line); }
+.sk-kv { padding-block: var(--s-1); }
+
+/* כרטיס הצעה (מצב ריק) */
+.suggestion {
+  min-block-size: 56px;
+  padding: var(--s-3);
+  border: 1px solid var(--c-primary-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-primary);
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
+  &:hover { background: var(--c-primary-soft); border-color: var(--c-primary); box-shadow: var(--shadow-md); }
+}
+
+/* שורת כלים: תווית קטנה + פקדים */
+.tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-block-start: 1px solid var(--c-line);
+}
+.tool-label { font-size: var(--fs-xs); font-weight: 600; color: var(--c-muted); }
+.row-note { flex-basis: 100%; font-size: var(--fs-xs); color: var(--c-muted); }
+
+.flip { transform: scaleX(-1); } /* אייקון כיווני (חץ שליחה) פונה שמאלה ב-RTL */
+
 .icon {
   inline-size: 18px;
   block-size: 18px;
@@ -210,12 +321,60 @@ button:disabled { cursor: not-allowed; }
   stroke-linejoin: round;
 }
 
-/* כיבוד העדפת תנועה מופחתת */
+/* טבלאות נתונים */
+.data-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  th, td {
+    padding-block: var(--s-2);
+    padding-inline: var(--s-2);
+    text-align: start;
+    vertical-align: middle;
+    border-block-end: 1px solid var(--c-line);
+  }
+  thead th {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    color: var(--c-muted);
+    white-space: nowrap;
+  }
+  tbody th { font-weight: 500; }
+  .num { white-space: nowrap; }
+  .total th, .total td { font-weight: 800; border-block-end: 0; }
+}
+
+/* רשימת נתונים עם אייקון: תווית קטנה מעל ערך */
+.kv {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 'icon k' 'icon v';
+    column-gap: var(--s-2);
+    padding-block: var(--s-2);
+    border-block-end: 1px solid var(--c-line);
+    &:last-child { border-block-end: 0; }
+  }
+  .icon { grid-area: icon; color: var(--c-primary); margin-block-start: 2px; inline-size: 16px; }
+  .k { grid-area: k; font-size: var(--fs-xs); color: var(--c-muted); line-height: 1.35; }
+  .k small { font-size: 1em; }
+  .v {
+    grid-area: v;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* כיבוד העדפת תנועה מופחתת — מבטל אנימציות ומעברים */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
     scroll-behavior: auto !important;
   }
 }

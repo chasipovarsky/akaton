@@ -69,7 +69,7 @@
           </p>
           <div class="suggestions">
             @for (s of suggestions; track s) {
-              <button class="chip" type="button" (click)="suggest(s)">{{ s }}</button>
+              <button class="suggestion" type="button" (click)="suggest(s)">{{ s }}</button>
             }
           </div>
         </div>
@@ -103,8 +103,8 @@
 
     @if (cars().length) {
       <!-- השוואה לרכב — ישירות, בלי לחכות לבוט -->
-      <div class="demos" role="group" aria-labelledby="car-label">
-        <label id="car-label" class="demos-label" for="car-select">השוואה לרכב:</label>
+      <div class="tool-row car-row" role="group" aria-labelledby="car-label">
+        <label id="car-label" class="tool-label" for="car-select">השוואה לרכב:</label>
         <select
           id="car-select"
           class="field sm"
@@ -126,19 +126,22 @@
           השווי
         </button>
         @if (compareNote()) {
-          <span class="demos-label" role="status">{{ compareNote() }}</span>
+          <span class="row-note" role="status">{{ compareNote() }}</span>
         }
       </div>
     }
 
     @if (demos().length) {
-      <div class="demos" role="group" aria-labelledby="demos-label">
-        <span id="demos-label" class="demos-label">אפשר לנסות עם עובדת לדוגמה:</span>
-        @for (d of demos(); track d.id) {
-          <button class="chip sm" type="button" [disabled]="busy()" (click)="loadDemo(d.id)">
-            {{ d.title }}
-          </button>
-        }
+      <div class="tool-row demo-row" role="group" aria-labelledby="demos-label">
+        <span id="demos-label" class="tool-label">אפשר לנסות עם עובדת לדוגמה:</span>
+        <!-- בטלפון: שורה אחת שגוללת אופקית בתוך האזור (לא את העמוד) -->
+        <div class="chip-scroll">
+          @for (d of demos(); track d.id) {
+            <button class="chip sm" type="button" [disabled]="busy()" (click)="loadDemo(d.id)">
+              {{ d.title }}
+            </button>
+          }
+        </div>
       </div>
     }
 
@@ -171,13 +174,20 @@
       </header>
 
       @if (rk === 'loading') {
-        <div aria-hidden="true">
-          @for (j of [0, 1, 2, 3]; track j) {
-            <span class="skeleton" style="block-size: 18px; margin-block: 14px"></span>
+        <!-- skeleton בצורת הטבלה: מספר · רכב · נטו · תג הפרש -->
+        <div class="rank-sk" aria-hidden="true">
+          <span class="skeleton sk-line w-60"></span>
+          @for (j of [0, 1, 2, 3, 4]; track j) {
+            <div class="sk-row">
+              <span class="skeleton sk-dot"></span>
+              <span class="skeleton sk-line"></span>
+              <span class="skeleton sk-line w-num"></span>
+              <span class="skeleton sk-pill"></span>
+            </div>
           }
         </div>
       } @else if (rk === 'error') {
-        <p class="soft-error" role="alert">
+        <p class="notice error" role="alert">
           לא הצלחתי לחשב את הדירוג.
           <button class="btn ghost sm" type="button" (click)="rank()">
             <svg class="icon" aria-hidden="true"><use href="#i-retry" /></svg>
@@ -195,7 +205,7 @@
           <p class="muted">
             היום: {{ r.today_label }} · נטו {{ r.today_net | number: '1.0-0' }} ₪
           </p>
-          <table>
+          <table class="data-table rank-table">
             <thead>
               <tr>
                 <th scope="col">#</th>
@@ -215,8 +225,8 @@
                     }
                   </th>
                   <td class="num">{{ o.net | number: '1.0-0' }} ₪</td>
-                  <td>
-                    <span class="pill" [class.pos]="o.diff >= 0" [class.neg]="o.diff < 0">
+                  <td class="diff">
+                    <span class="pill dir" [class.pos]="o.diff >= 0" [class.neg]="o.diff < 0">
                       <bdi dir="ltr">{{ signed(o.diff) }}</bdi> ₪
                     </span>
                   </td>
@@ -244,15 +254,19 @@
   @if (loading()) {
     <section class="decision" aria-busy="true">
       <div class="panel hero" aria-hidden="true">
-        <span class="skeleton" style="inline-size: 40%; block-size: 14px"></span>
-        <span class="skeleton" style="inline-size: 60%; block-size: 40px; margin-block: 12px"></span>
-        <span class="skeleton" style="inline-size: 30%; block-size: 24px; border-radius: 999px"></span>
+        <span class="skeleton sk-line w-40"></span>
+        <span class="skeleton sk-hero"></span>
+        <span class="skeleton sk-pill"></span>
       </div>
       <div class="cols" aria-hidden="true">
         @for (i of [0, 1]; track i) {
           <div class="panel col">
+            <span class="skeleton sk-line w-40"></span>
             @for (j of [0, 1, 2, 3]; track j) {
-              <span class="skeleton" style="block-size: 16px; margin-block: 14px"></span>
+              <div class="sk-kv">
+                <span class="skeleton sk-line w-40 thin"></span>
+                <span class="skeleton sk-line w-60"></span>
+              </div>
             }
           </div>
         }
@@ -261,7 +275,7 @@
   } @else if (pending(); as p) {
     <!-- בינתיים: מצב היום — בלי שום מספר של החלופה -->
     <section class="decision" aria-labelledby="pending-title">
-      <p class="pending-label" role="status">
+      <p class="notice warn pending-label" role="status">
         <strong id="pending-title">בינתיים: מצב היום.</strong>
         ההשוואה המלאה תופיע אחרי שהנציגה תענה.
       </p>
@@ -276,7 +290,7 @@
       </div>
       <div class="panel col">
         <h3>היום</h3>
-        <ul class="rows">
+        <ul class="kv rows">
           <li>
             <svg class="icon" aria-hidden="true"><use href="#i-car" /></svg>
             <span class="k">רכב</span>
@@ -321,7 +335,7 @@
         </div>
         <div class="hero-net">{{ c.alt.net | number: '1.0-0' }} <span class="cur">₪</span></div>
         <div class="hero-meta">
-          <span class="pill" [class.pos]="c.diff >= 0" [class.neg]="c.diff < 0">
+          <span class="pill lg" [class.pos]="c.diff >= 0" [class.neg]="c.diff < 0">
             הפרש <bdi dir="ltr">{{ signed(c.diff) }}</bdi> ₪
           </span>
           <span class="muted">היום: {{ c.today.net | number: '1.0-0' }} ₪</span>
@@ -345,7 +359,7 @@
           ]; track col.title) {
             <div class="panel col" [class.alt]="col.title === 'חלופה'">
               <h3>{{ col.title }}</h3>
-              <ul class="rows">
+              <ul class="kv rows">
                 <li>
                   <svg class="icon" aria-hidden="true"><use href="#i-car" /></svg>
                   <span class="k">רכב</span>
@@ -408,7 +422,7 @@
           פירוט מלא
           <svg class="icon chev" aria-hidden="true"><use href="#i-chevron" /></svg>
         </summary>
-        <table>
+        <table class="data-table">
           <thead>
             <tr>
               <th scope="col"><span class="sr-only">רכיב</span></th>

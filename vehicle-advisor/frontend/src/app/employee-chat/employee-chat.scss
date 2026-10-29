@@ -1,36 +1,36 @@
-
 .layout {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-5);
   @media (min-width: 900px) {
-    &.has-result { grid-template-columns: 1.15fr 1fr; align-items: start; }
+    &.has-result { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; }
   }
+  @media (max-width: 480px) { gap: var(--s-4); }
 }
 
-h2 { margin: 0; font-size: 1.1rem; }
-h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-weight: 600; }
-.muted { color: var(--c-muted); font-size: 0.9rem; }
+h2 { margin: 0; font-size: var(--fs-lg); }
+h3 { margin: 0 0 var(--s-1); font-size: var(--fs-sm); color: var(--c-muted); font-weight: 700; }
 
-/* ── צ'אט ──────────────────────────────────────────────────────────────── */
+/* ── צ'אט ── */
 .chat {
   display: flex;
   flex-direction: column;
-  block-size: min(720px, calc(100dvh - 170px));
-  min-block-size: 460px;
+  block-size: min(740px, calc(100dvh - 150px));
+  min-block-size: 480px;
   padding: 0;
   overflow: hidden;
 }
 
 .bar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--s-3);
-  padding-block: var(--s-3);
-  padding-inline: var(--s-4);
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
   border-block-end: 1px solid var(--c-line);
 }
+.bar-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 
 .messages {
   flex: 1;
@@ -39,108 +39,107 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
   flex-direction: column;
   gap: var(--s-3);
   padding: var(--s-4);
+  background: var(--c-surface-alt);
   overscroll-behavior: contain;
 }
 
 .msg {
-  max-inline-size: 82%;
-  padding-block: var(--s-2);
-  padding-inline: var(--s-4);
+  max-inline-size: min(82%, 560px);
+  padding: var(--s-2) var(--s-4);
   border-radius: var(--r-lg);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.55;
+  line-height: 1.6;
+  box-shadow: var(--shadow-sm);
   animation: msg-in var(--t-base) ease-out;
 
   &.bot {
     align-self: flex-start;
-    background: var(--c-surface-alt);
+    background: var(--c-surface);
     border: 1px solid var(--c-line);
     border-start-start-radius: var(--r-sm);
   }
   &.user {
     align-self: flex-end;
     background: var(--c-primary);
-    color: #fff;
+    color: var(--c-on-primary);
     border-start-end-radius: var(--r-sm);
   }
-  &.sk { inline-size: 55%; animation: none; }
+  &.sk { inline-size: 55%; animation: none; box-shadow: none; }
   &.user.sk { background: var(--c-primary-soft); inline-size: 35%; }
-
-  &.pending {
-    inline-size: min(280px, 70%);
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-2);
-  }
+  &.pending { inline-size: min(280px, 75%); display: flex; flex-direction: column; gap: var(--s-2); }
+  /* שגיאה בצ'אט — אותו עיצוב כמו .notice.error */
   &.error {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--s-2);
     background: var(--c-neg-bg);
-    border-color: #f2c9c4;
+    border-color: var(--c-neg-line);
     color: var(--c-neg);
     white-space: normal;
   }
-
-  .line { block-size: 12px; inline-size: 100%; }
+  .line { block-size: 10px; inline-size: 100%; }
   .line.short { inline-size: 60%; }
 }
-
 @keyframes msg-in {
   from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: none; }
+  to { opacity: 1; transform: none; }
 }
 
-.typing {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  font-size: 0.85rem;
-  color: var(--c-muted);
-}
+.typing { display: inline-flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); color: var(--c-muted); }
 .dots {
   display: inline-flex;
   gap: 3px;
   i {
-    inline-size: 5px;
-    block-size: 5px;
+    inline-size: 6px;
+    block-size: 6px;
     border-radius: 50%;
-    background: currentColor;
+    background: var(--c-primary);
+    opacity: 0.3;
     animation: dot 1.2s ease-in-out infinite;
     &:nth-child(2) { animation-delay: 0.15s; }
     &:nth-child(3) { animation-delay: 0.3s; }
   }
 }
 @keyframes dot {
-  0%, 60%, 100% { opacity: 0.3; }
-  30% { opacity: 1; }
+  0%, 60%, 100% { opacity: 0.3; transform: none; }
+  30% { opacity: 1; transform: translateY(-2px); }
 }
 
-.empty {
-  margin-block: auto;
-  text-align: center;
-  padding-inline: var(--s-2);
-}
+/* מצב ריק: הצעות בכרטיסים */
+.empty { margin-block: auto; padding: var(--s-4) var(--s-2); text-align: center; }
 .hint { color: var(--c-muted); margin-block: 0 var(--s-4); }
 .suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--s-2);
+  max-inline-size: 620px;
+  margin-inline: auto;
+}
+/* שורות כלים מעל הקלט: השוואה לרכב / עובדות לדוגמה */
+/* הבורר מתכווץ, הכפתור נשאר באותה שורה גם ב-360px */
+.car-row {
+  select { flex: 1 1 0; min-inline-size: 0; inline-size: auto; text-overflow: ellipsis; }
+  .tool-label { flex-basis: 100%; }
+  @media (min-width: 601px) { .tool-label { flex-basis: auto; } }
+}
+.demo-row { padding-block-end: 0; }
+.chip-scroll {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: var(--s-2);
+  min-inline-size: 0;
+  /* בטלפון: שורה אחת שגוללת בתוך האזור, בלי גלילה אופקית של העמוד */
+  @media (max-width: 600px) {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-block-end: var(--s-2);
+    scrollbar-width: thin;
+  }
 }
-.demos {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2);
-  padding-block: var(--s-2) 0;
-  padding-inline: var(--s-3);
-  border-block-start: 1px solid var(--c-line);
-}
-.demos-label { font-size: 0.82rem; color: var(--c-muted); }
-.demos + .composer { border-block-start: 0; }
+.demo-row + .composer { border-block-start: 0; }
 
 .composer {
   display: flex;
@@ -151,111 +150,73 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
   .field { flex: 1; min-inline-size: 0; }
   .btn { flex: none; }
 }
-/* חץ השליחה פונה שמאלה ב-RTL */
-.flip { transform: scaleX(-1); }
 
-.bar-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-
-/* ── מה הכי משתלם לי? ──────────────────────────────────────────────────── */
+/* ── עמודת התוצאות ── */
 .side { display: flex; flex-direction: column; gap: var(--s-4); min-inline-size: 0; }
 
 .rank {
-  overflow-x: auto;
-  .rank-head { display: flex; justify-content: space-between; align-items: center; margin-block-end: var(--s-2); }
-  .best { background: var(--c-pos-bg); }
-  .best th { font-weight: 700; }
-  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .ev { color: var(--c-primary); vertical-align: -3px; inline-size: 15px; }
-  .turn {
-    margin-block: var(--s-3) 0;
-    padding: var(--s-2) var(--s-3);
-    border-radius: var(--r-md);
-    background: var(--c-primary-soft);
-  }
-  .note { margin-block: var(--s-3) 0; font-size: 0.82rem; color: var(--c-muted); }
+  .rank-head { display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); margin-block-end: var(--s-2); }
   .muted { margin-block: 0 var(--s-2); }
+  .turn { margin-block: var(--s-3) 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-md); background: var(--c-accent-soft); color: var(--c-accent); }
+  .note { margin-block: var(--s-2) 0; font-size: var(--fs-xs); color: var(--c-muted); }
+}
+.rank-table {
+  th, td { padding-block: var(--s-3); }
+  tbody th { overflow-wrap: anywhere; }
+  .diff { text-align: end; }   /* עמודת ההפרש מיושרת לקצה — כיוון אחיד */
+  thead th:last-child { text-align: end; }
+  .best { background: var(--c-accent-soft); }
+  .best th, .best td { font-weight: 700; }
+  .best td:first-child { box-shadow: inset -3px 0 0 var(--c-accent); }
+  .ev { color: var(--c-primary); vertical-align: -3px; inline-size: 15px; }
+  @media (max-width: 400px) { th, td { padding-inline: var(--s-1); } }
 }
 
-/* ── פאנל ההחלטה ───────────────────────────────────────────────────────── */
-.decision {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-}
+.decision { display: flex; flex-direction: column; gap: var(--s-3); }
 
 .hero {
-  .hero-label { color: var(--c-muted); font-weight: 600; }
+  border-block-start: 4px solid var(--c-primary);
+  .hero-label { font-size: var(--fs-sm); color: var(--c-muted); font-weight: 600; }
   .hero-net {
-    font-size: clamp(2rem, 5vw, 2.6rem);
+    font-size: var(--fs-hero);
     font-weight: 800;
-    color: var(--c-text);
-    line-height: 1.2;
+    line-height: 1.15;
     margin-block: var(--s-1) var(--s-3);
     font-variant-numeric: tabular-nums;
-    .cur { font-size: 0.6em; font-weight: 700; color: var(--c-muted); }
+    .cur { font-size: 0.55em; font-weight: 700; color: var(--c-muted); }
   }
-  .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
-  .reason {
-    margin-block: var(--s-3) 0;
-    padding-block-start: var(--s-3);
-    border-block-start: 1px solid var(--c-line);
-    color: var(--c-muted);
-    font-size: 0.9rem;
-  }
-  > .skeleton { display: block; }
+  .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
+  .reason { margin-block: var(--s-3) 0; padding-block-start: var(--s-3); border-block-start: 1px solid var(--c-line); font-size: var(--fs-xs); color: var(--c-muted); }
+  .reason + .reason { margin-block-start: var(--s-1); padding-block-start: 0; border: 0; }
 }
 
+/* היום / חלופה: אותו גובה, נטו מיושר לתחתית */
 .cols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-3);
-  @media (max-width: 480px) { grid-template-columns: 1fr; }
+  @media (max-width: 560px) { grid-template-columns: minmax(0, 1fr); }
 }
 .col {
+  display: flex;
+  flex-direction: column;
   padding: var(--s-3) var(--s-4);
   &.alt { box-shadow: var(--shadow-md), inset 0 3px 0 var(--c-primary); }
 }
-
 .rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  li {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-areas: 'icon k' 'icon v';
-    column-gap: var(--s-2);
-    padding-block: var(--s-2);
-    border-block-end: 1px solid var(--c-line);
-    &:last-child { border-block-end: 0; }
-  }
-  .icon { grid-area: icon; color: var(--c-primary); margin-block-start: 2px; }
-  .k { grid-area: k; font-size: 0.82rem; color: var(--c-muted); }
-  .k small { font-size: 0.95em; }
-  .v { grid-area: v; font-weight: 600; font-variant-numeric: tabular-nums; }
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   .net {
+    margin-block-start: auto;
     grid-template-areas: 'k' 'v';
     grid-template-columns: 1fr;
     padding-block-start: var(--s-3);
-    .v { font-size: 1.1rem; font-weight: 800; }
+    .v { font-size: var(--fs-lg); font-weight: 800; }
   }
 }
 
-.pending-label {
-  margin: 0;
-  padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-md);
-  background: var(--c-warn-bg);
-  border: 1px solid var(--c-warn-line);
-  color: var(--c-warn-text);
-}
-
-.why {
-  margin: 0;
-  background: var(--c-primary-soft);
-  box-shadow: none;
-  line-height: 1.6;
-}
+.why { margin: 0; background: var(--c-primary-soft); box-shadow: none; font-size: var(--fs-sm); line-height: 1.6; }
 
 .full {
   padding-block: 0;
@@ -263,7 +224,7 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-block: var(--s-3);
+    min-block-size: 48px;
     font-weight: 600;
     color: var(--c-primary);
     cursor: pointer;
@@ -271,19 +232,5 @@ h3 { margin: 0 0 var(--s-2); font-size: 0.95rem; color: var(--c-muted); font-wei
     &::-webkit-details-marker { display: none; }
   }
   .chev { transition: transform var(--t-base); }
-  &[open] {
-    padding-block-end: var(--s-3);
-    .chev { transform: rotate(180deg); }
-  }
+  &[open] { padding-block-end: var(--s-3); .chev { transform: rotate(180deg); } }
 }
-
-table { inline-size: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-th, td {
-  padding-block: var(--s-2);
-  padding-inline: var(--s-2);
-  text-align: start;
-  border-block-end: 1px solid var(--c-line);
-}
-thead th { font-size: 0.85rem; color: var(--c-muted); font-weight: 600; }
-tbody th { font-weight: 500; }
-.total th, .total td { font-weight: 800; border-block-end: 0; }
