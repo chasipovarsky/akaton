@@ -63,7 +63,7 @@ def build_alternative(emp: dict, car_id: str, participation: float | None,
 
 
 def build_waiver(emp: dict):
-    occ = next((o for o in load_occupations() if o["name"] == emp["occupation"]), None)
+    occ = next((o for o in load_occupations() if o["name"] == emp.get("occupation")), None)
     if occ is None:
         return None, {"missing": "occupation", "question": "מה העיסוק שלך?"}
     if not occ["can_waive"]:

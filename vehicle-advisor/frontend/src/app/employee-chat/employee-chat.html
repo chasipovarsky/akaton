@@ -82,9 +82,12 @@
       @if (busy()) {
         <div class="msg bot pending">
           <span class="typing">
-            הבוט מקליד
+            {{ stageLabel() }}
             <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
           </span>
+          @if (slowHint()) {
+            <span class="muted" role="status">זה לוקח יותר מהרגיל, אפשר גם להשתמש בהשוואה ובדירוג</span>
+          }
           <span class="skeleton line" aria-hidden="true"></span>
           <span class="skeleton line short" aria-hidden="true"></span>
         </div>

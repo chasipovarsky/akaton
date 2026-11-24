@@ -1,5 +1,5 @@
 """
-"חשיבה" מינימלית + timeout של 60 שניות — נבדק דרך הספרייה המותקנת עצמה:
+"חשיבה" מינימלית + timeout של 40 שניות — נבדק דרך הספרייה המותקנת עצמה:
 client אמיתי של google-genai, ורק השכבה שמדברת עם הרשת (_api_client._request) מוחלפת
 בפונקציה שמתעדת את בקשת ה-HTTP שנבנתה ומחזירה תשובה מינימלית. בלי קריאה ל-Gemini.
 """
@@ -21,7 +21,7 @@ OK_BODY = json.dumps({"candidates": [{"content": {"role": "model", "parts": [{"t
 def real_client():
     # יצירת client לוקחת כמה שניות (SSL) — פעם אחת לקובץ, כמו בשרת
     return genai.Client(api_key="test-key-not-real",
-                        http_options=types.HttpOptions(timeout=60_000, retry_options=None))
+                        http_options=types.HttpOptions(timeout=40_000, retry_options=None))
 
 
 @pytest.fixture
@@ -124,17 +124,17 @@ def test_other_400_is_not_swallowed(wire, monkeypatch):
     assert len(sent) == 1
 
 
-# ── timeout אפקטיבי של 60 שניות ──────────────────────────────────────────────
+# ── timeout אפקטיבי של 25 שניות ──────────────────────────────────────────────
 
-def test_effective_timeout_is_60_seconds(wire, monkeypatch):
+def test_effective_timeout_is_40_seconds(wire, monkeypatch):
     import time
     sent, _ = wire
     monkeypatch.setattr(agent, "MODELS", ["gemini-2.5-flash"])
     agent._generate(CONTENTS, CONFIG, time.monotonic() + agent.TURN_TIMEOUT_S)
-    assert agent.CALL_TIMEOUT_S == 60 and agent.TURN_TIMEOUT_S == 90
-    assert sent[0].timeout == 60.0
-    assert sent[0].headers["X-Server-Timeout"] == "60"
-    # 20 שניות לפני סוף התור — הקריאה מקוצרת לזמן שנשאר
-    agent._generate(CONTENTS, CONFIG, time.monotonic() + 20)
-    assert 19.0 <= sent[1].timeout <= 20.0
-    assert sent[1].headers["X-Server-Timeout"] == "20"
+    assert agent.CALL_TIMEOUT_S == 40 and agent.TURN_TIMEOUT_S == 90
+    assert sent[0].timeout == 40.0
+    assert sent[0].headers["X-Server-Timeout"] == "40"
+    # 15 שניות לפני סוף התור — הקריאה מקוצרת לזמן שנשאר
+    agent._generate(CONTENTS, CONFIG, time.monotonic() + 15)
+    assert 14.0 <= sent[1].timeout <= 15.0
+    assert sent[1].headers["X-Server-Timeout"] == "15"

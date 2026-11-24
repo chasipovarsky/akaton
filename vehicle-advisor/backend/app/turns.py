@@ -13,7 +13,7 @@ log = logging.getLogger("vehicle_advisor")
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="bot-turn")
 _lock = threading.Lock()
-# sid → {"busy": bool, "error": str | None, "message": str, "started": float}
+# sid → {"busy": bool, "error": str | None, "message": str, "started": float, "stage": str | None}
 _state: dict[str, dict] = {}
 
 
@@ -24,7 +24,7 @@ def start(sid: str, message: str, fn: Callable[[], None],
         if _state.get(sid, {}).get("busy"):
             return False
         _state[sid] = {"busy": True, "error": None, "message": message,
-                       "started": time.monotonic()}
+                       "started": time.monotonic(), "stage": None}
     _executor.submit(_run, sid, fn, on_error)
     return True
 
@@ -49,8 +49,17 @@ def _run(sid: str, fn: Callable[[], None], on_error: Callable[[Exception], str])
                 st["error"] = error
 
 
+def set_stage(sid: str, stage: str) -> None:
+    """השלב של התור שרץ (checking / computing / writing) — רק להצגה במסך העובדת."""
+    with _lock:
+        st = _state.get(sid)
+        if st is not None and st.get("busy"):
+            st["stage"] = stage
+
+
 def status(sid: str) -> dict:
-    """busy, error_message (רק כשהתור נכשל), ו-pending_message (ההודעה שבטיפול / שנכשלה)."""
+    """busy, error_message (רק כשהתור נכשל), pending_message (ההודעה שבטיפול / שנכשלה),
+    ו-stage (השלב של התור שרץ; None כשאין תור)."""
     with _lock:
         st = dict(_state.get(sid, {}))
     busy = bool(st.get("busy"))
@@ -58,6 +67,7 @@ def status(sid: str) -> dict:
         "busy": busy,
         "error_message": None if busy else st.get("error"),
         "pending_message": st.get("message", "") if (busy or st.get("error")) else "",
+        "stage": st.get("stage") if busy else None,
     }
 
 

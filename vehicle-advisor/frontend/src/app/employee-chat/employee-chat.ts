@@ -4,13 +4,19 @@ import {
 import { DecimalPipe } from '@angular/common';
 import {
   Api, CarOption, ChatMsg, ChatState, Comparison, DemoEmployee, PendingComparison, QuestionStatus,
-  RankResult,
+  RankResult, TurnStage,
 } from '../api.service';
 
 const POLL_MS = 5000;            // בדיקת תשובת נציג
-const TURN_POLL_MS = 2000;       // בדיקת תור של הבוט שרץ ברקע
+const TURN_POLL_MS = 1000;       // בדיקת תור של הבוט שרץ ברקע (תור רגיל: 2-4 שניות)
 const TURN_MAX_WAIT_MS = 180000; // 3 דקות — אחרי זה "זה לוקח יותר מהרגיל"
+const SLOW_HINT_MS = 30000;      // אחרי 30 שניות: רמז שאפשר להשתמש בהשוואה ובדירוג בינתיים
 const SLOW_MSG = 'זה לוקח יותר מהרגיל. אפשר לנסות שוב.';
+const STAGE_LABELS: Record<TurnStage, string> = {
+  checking: 'בודקת את הנתונים',
+  computing: 'מחשבת',
+  writing: 'מנסחת תשובה',
+};
 
 @Component({
   selector: 'app-employee-chat',
@@ -47,6 +53,14 @@ export class EmployeeChat implements OnInit, OnDestroy {
   });
   draft = signal('');
   busy = signal(false);
+  // מה הבוט עושה עכשיו (מהשרת); בלי שלב — "הבוט מקליד"
+  stage = signal<TurnStage | null>(null);
+  // התור ארוך מהרגיל — הבוט ממשיך, ובינתיים מציעים את המסלולים שלא תלויים בו
+  slowHint = signal(false);
+  stageLabel = computed(() => {
+    const s = this.stage();
+    return s ? STAGE_LABELS[s] : 'הבוט מקליד';
+  });
   loading = signal(true);
   // הודעה שנכשלה בשליחה — מאפשרת "לנסות שוב"
   failed = signal<{ text: string; sent: string } | null>(null);
@@ -71,6 +85,7 @@ export class EmployeeChat implements OnInit, OnDestroy {
           this.comparison.set(s.comparison);
           this.scroll();
           this.startTurnPolling(s.pending_message ?? '');
+          this.stage.set(s.stage ?? null);
         } else {
           this.applyState(s);
         }
@@ -90,6 +105,8 @@ export class EmployeeChat implements OnInit, OnDestroy {
     this.stopPolling(); // בזמן תור לא בודקים תשובת נציג — התור עצמו יחזיר את המצב
     this.stopTurnPolling();
     this.busy.set(true);
+    this.stage.set('checking'); // השרת מתחיל תמיד בשלב הזה — לא מחכים לבדיקה הראשונה
+    this.slowHint.set(false);
     this.turnSent = sent;
     this.turnStarted = Date.now();
     const sid = this.sessionId();
@@ -99,10 +116,12 @@ export class EmployeeChat implements OnInit, OnDestroy {
   private stopTurnPolling() {
     clearInterval(this.turnPoll);
     this.turnPoll = undefined;
+    this.slowHint.set(false);
   }
 
   private checkTurn(sid: string) {
     if (sid !== this.sessionId()) return this.stopTurnPolling(); // עברנו לשיחה חדשה
+    if (Date.now() - this.turnStarted > SLOW_HINT_MS) this.slowHint.set(true);
     if (Date.now() - this.turnStarted > TURN_MAX_WAIT_MS) {
       this.stopTurnPolling();
       this.busy.set(false);
@@ -112,7 +131,11 @@ export class EmployeeChat implements OnInit, OnDestroy {
     }
     this.api.state(sid).subscribe({
       next: (s) => {
-        if (s.busy || sid !== this.sessionId() || !this.turnPoll) return;
+        if (sid !== this.sessionId() || !this.turnPoll) return;
+        if (s.busy) {
+          this.stage.set(s.stage ?? null);
+          return;
+        }
         this.stopTurnPolling();
         this.applyState(s);
       },
@@ -253,7 +276,7 @@ export class EmployeeChat implements OnInit, OnDestroy {
     this.busy.set(true);
     this.scroll();
 
-    // השרת חוזר מיד עם pending; התשובה מגיעה דרך /state (בדיקה כל 2 שניות)
+    // השרת חוזר מיד עם pending; התשובה מגיעה דרך /state (בדיקה כל שנייה)
     this.api.chat(this.sessionId(), text).subscribe({
       next: () => this.startTurnPolling(text),
       error: (e) => {

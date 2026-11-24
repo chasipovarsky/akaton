@@ -2,6 +2,16 @@ import time
 
 import pytest
 
+import app.agent as agent
+
+
+@pytest.fixture(autouse=True)
+def default_call_timeout(monkeypatch):
+    """הבדיקות רצות עם ברירת המחדל של GEMINI_CALL_TIMEOUT, בלי קשר להגדרה בסביבה."""
+    monkeypatch.setattr(agent, "CALL_TIMEOUT_S", agent.DEFAULT_CALL_TIMEOUT_S)
+    # כל בדיקה מתחילה בלי מודלים "מושהים" מבדיקה קודמת
+    monkeypatch.setattr(agent, "_cooldown", {})
+
 
 def wait_turn(client, sid: str, timeout: float = 10.0) -> dict:
     """POST /api/chat חוזר מיד; מחכים (polling כמו הדפדפן) עד שהתור ברקע מסתיים."""

@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import threading
 import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
@@ -17,7 +18,7 @@ from google.genai import types
 
 from app.config import load_catalogue, load_rules, load_demo_employees, warm_cache
 from app.comparison import run_comparison, rank_options, eligible_options
-from app.agent import chat as agent_chat, REQUIRED, TurnTimeout
+from app.agent import chat as agent_chat, REQUIRED, TurnTimeout, MODELS as GEMINI_MODELS, warm_client
 
 TIMEOUT_MSG = "לא הצלחתי לסיים בזמן, אפשר לנסות שוב."
 
@@ -30,6 +31,13 @@ if not logging.getLogger("vehicle_advisor").handlers:
     logging.getLogger("vehicle_advisor").setLevel(logging.INFO)
 
 
+def _warm_client() -> None:
+    try:
+        warm_client()
+    except Exception:
+        log.exception("gemini client warm-up failed")  # ייווצר בהודעה הראשונה
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # חימום: קבצי הנתונים נטענים בעליית השרת, לא בבקשה הראשונה
@@ -37,6 +45,10 @@ async def lifespan(_app: FastAPI):
         warm_cache()
     except Exception:
         log.exception("warm cache failed")  # לא מפילים את השרת; ייטען בבקשה הראשונה
+    # client של Gemini — ברקע, כדי לא לעכב את העלייה; בלי מפתח פשוט ייווצר בהודעה הראשונה
+    if os.getenv("GEMINI_API_KEY"):
+        threading.Thread(target=_warm_client, daemon=True, name="warm-gemini").start()
+    log.info("gemini models (in fallback order): %s", ", ".join(GEMINI_MODELS))
     yield
     turns.shutdown()
 

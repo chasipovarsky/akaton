@@ -66,7 +66,11 @@ export interface ChatState extends QuestionStatus {
   busy?: boolean;
   error_message?: string | null;
   pending_message?: string;
+  // השלב של התור שרץ — רק להצגה; null כשאין תור
+  stage?: TurnStage | null;
 }
+
+export type TurnStage = 'checking' | 'computing' | 'writing';
 
 // POST /api/chat ו-/api/chat/resume חוזרים מיד; התשובה מגיעה דרך /state
 export interface TurnStarted extends QuestionStatus {
